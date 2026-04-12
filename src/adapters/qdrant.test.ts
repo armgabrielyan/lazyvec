@@ -176,7 +176,7 @@ describe("QdrantAdapter", () => {
 
     expect(scrollRequest).toEqual({
       limit: 50,
-      offset: "10",
+      offset: 10,
       with_payload: true,
       with_vector: false,
     });
@@ -193,6 +193,41 @@ describe("QdrantAdapter", () => {
         source: "wiki",
       },
       vector: [0.0234, -0.0891, 0.1247],
+    });
+  });
+
+  test("retrieves numeric point IDs as numbers after display normalization", async () => {
+    let retrieveRequest: unknown = null;
+    const adapter = new QdrantAdapter({
+      client: createClient({
+        retrieve: async (_collection, request) => {
+          retrieveRequest = request;
+          return [
+            {
+              id: 42,
+              payload: {
+                source: "wiki",
+              },
+              vector: [0.1, 0.2, 0.3],
+            },
+          ];
+        },
+      }),
+    });
+
+    await adapter.connect(localConnection);
+
+    await expect(adapter.getRecord("rag_chunks", "42")).resolves.toEqual({
+      id: "42",
+      metadata: {
+        source: "wiki",
+      },
+      vector: [0.1, 0.2, 0.3],
+    });
+    expect(retrieveRequest).toEqual({
+      ids: [42],
+      with_payload: true,
+      with_vector: true,
     });
   });
 

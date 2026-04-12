@@ -2,8 +2,8 @@
 
 A terminal UI for browsing and inspecting vector databases.
 
-The current implementation is the v0.1 OpenTUI shell with mock Qdrant data. It starts with a
-connection picker, then shows the three-panel collection, record, and inspector layout.
+The current implementation is the v0.1 OpenTUI shell with a Qdrant read-only adapter. It starts
+with a connection picker, then loads collections and records from the selected connection.
 
 ## Run
 
@@ -36,5 +36,5 @@ bun run start -- --provider qdrant --url http://localhost:6333
 | `Enter` | Connect or inspect/select |
 | `Tab` / `Shift+Tab` | Cycle main-view panel focus |
 | `c` | Return to the connection picker |
-| `r` | Refresh mock data |
+| `r` | Refresh the current collection |
 | `?` | Toggle help |

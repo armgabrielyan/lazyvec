@@ -25,22 +25,3 @@ export interface ConnectionState {
   defaultConnectionId?: string;
   onboarding: ConnectionOnboarding;
 }
-
-export interface CollectionSummary {
-  name: string;
-  dimensions: number;
-  count: number;
-  metric: "cosine" | "euclidean" | "dotproduct" | "unknown";
-  status: "ready" | "initializing" | "error";
-}
-
-export interface VectorRecord {
-  id: string;
-  dimensions: number;
-  metadata: Record<string, unknown>;
-  vector: number[];
-}
-
-export interface CollectionDataset extends CollectionSummary {
-  records: VectorRecord[];
-}

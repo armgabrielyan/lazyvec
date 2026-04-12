@@ -9,7 +9,7 @@ import type {
   VectorPage,
   VectorRecord,
 } from "./types";
-import { createQdrantClient, type QdrantClientFactory, type QdrantClientLike, type QdrantPoint } from "./qdrant-client";
+import { createQdrantClient, type QdrantClientFactory, type QdrantClientLike, type QdrantPoint, type QdrantPointId } from "./qdrant-client";
 import type { ConnectionProfile } from "../types";
 
 export const qdrantCapabilities: AdapterCapabilities = {
@@ -105,7 +105,7 @@ export class QdrantAdapter implements VectorDBAdapter {
   async listRecords(collection: string, opts: ListOptions): Promise<VectorPage> {
     const response = await this.requireClient().scroll(collection, {
       limit: opts.limit,
-      offset: opts.cursor,
+      offset: opts.cursor === undefined ? undefined : toQdrantPointId(opts.cursor),
       with_payload: true,
       with_vector: opts.includeVectors ?? false,
     });
@@ -120,7 +120,7 @@ export class QdrantAdapter implements VectorDBAdapter {
 
   async getRecord(collection: string, id: string): Promise<VectorRecord> {
     const records = await this.requireClient().retrieve(collection, {
-      ids: [id],
+      ids: [toQdrantPointId(id)],
       with_payload: true,
       with_vector: true,
     });
@@ -140,6 +140,10 @@ export class QdrantAdapter implements VectorDBAdapter {
 
     return this.client;
   }
+}
+
+function toQdrantPointId(id: string): QdrantPointId {
+  return /^\d+$/.test(id) ? Number(id) : id;
 }
 
 function normalizePoint(point: QdrantPoint): VectorRecord {

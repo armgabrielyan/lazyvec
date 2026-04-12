@@ -1,17 +1,19 @@
 import { useKeyboard, useRenderer } from "@opentui/react";
-import { useMemo, useReducer } from "react";
+import { useMemo, useReducer, useRef } from "react";
 import type { ReactNode } from "react";
+import { createAdapter as createDefaultAdapter } from "./adapters/registry";
+import type { Collection, VectorDBAdapter, VectorPage, VectorRecord } from "./adapters/types";
+import { loadCollectionRecords, loadInitialBrowserData, loadRecordDetails, type BrowserData } from "./app-data/browser-data";
 import { ConnectionSelect } from "./components/ConnectionSelect";
 import { clamp, formatCount, formatMetadataValue, formatVectorPreview, metadataPreview, pad, truncate } from "./format";
-import { mockCollections } from "./mock-data";
-import type { CollectionDataset, ConnectionProfile, ConnectionState, Panel, Screen, VectorRecord } from "./types";
+import type { ConnectionProfile, ConnectionState, Panel, Screen } from "./types";
 
 const panelOrder: Panel[] = ["collections", "records", "inspector"];
+const defaultPageSize = 50;
 
 const colors = {
   accent: "#7dd3fc",
   border: "#3f4655",
-  danger: "#f87171",
   focus: "#a7f3d0",
   muted: "#8b95a7",
   selectedBg: "#263141",
@@ -29,17 +31,35 @@ interface AppState {
   focusedPanel: Panel;
   showHelp: boolean;
   status: string;
+  loading: boolean;
+  error: string | null;
+  collections: Collection[];
+  records: VectorRecord[];
+  inspectedRecord: VectorRecord | null;
+  recordCursor?: string;
 }
 
 type AppAction =
   | { type: "MOVE_CONNECTION"; delta: number; connectionCount: number }
-  | { type: "CONNECT_SELECTED"; connectionName: string | null }
+  | { type: "CONNECT_REQUEST"; connectionName: string | null }
+  | { type: "CONNECT_SUCCESS"; connectionName: string; data: BrowserData }
+  | { type: "CONNECT_FAILURE"; error: string }
   | { type: "BACK_TO_CONNECTIONS" }
   | { type: "CYCLE_FOCUS"; delta: number }
-  | { type: "MOVE_IN_FOCUSED_PANEL"; delta: number; collectionCount: number; recordCount: number }
-  | { type: "SELECT_CURRENT"; recordCount: number }
-  | { type: "REFRESH" }
+  | { type: "SELECT_COLLECTION_REQUEST"; index: number; collectionName: string }
+  | { type: "SELECT_COLLECTION_SUCCESS"; index: number; collectionName: string; page: VectorPage }
+  | { type: "MOVE_RECORD"; delta: number; recordCount: number }
+  | { type: "INSPECT_RECORD_REQUEST"; recordId: string }
+  | { type: "INSPECT_RECORD_SUCCESS"; record: VectorRecord }
+  | { type: "LOAD_FAILURE"; error: string }
+  | { type: "REFRESH_EMPTY" }
   | { type: "TOGGLE_HELP" };
+
+interface AppProps {
+  connectionState: ConnectionState;
+  createAdapter?: typeof createDefaultAdapter;
+  pageSize?: number;
+}
 
 function createInitialState(connectionCount: number): AppState {
   return {
@@ -50,6 +70,11 @@ function createInitialState(connectionCount: number): AppState {
     focusedPanel: "collections",
     showHelp: false,
     status: connectionCount === 0 ? "Add a connection before connecting." : "Select a connection to start.",
+    loading: false,
+    error: null,
+    collections: [],
+    records: [],
+    inspectedRecord: null,
   };
 }
 
@@ -64,20 +89,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
         };
       }
 
-      const selectedConnectionIndex = clamp(
-        state.selectedConnectionIndex + action.delta,
-        0,
-        action.connectionCount - 1,
-      );
-
       return {
         ...state,
-        selectedConnectionIndex,
+        selectedConnectionIndex: clamp(state.selectedConnectionIndex + action.delta, 0, action.connectionCount - 1),
         status: "Connection selected.",
       };
     }
 
-    case "CONNECT_SELECTED": {
+    case "CONNECT_REQUEST":
       if (action.connectionName === null) {
         return {
           ...state,
@@ -87,19 +106,48 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
       return {
         ...state,
+        loading: true,
+        error: null,
+        status: `Connecting to ${action.connectionName}...`,
+      };
+
+    case "CONNECT_SUCCESS":
+      return {
+        ...state,
         screen: "main",
         focusedPanel: "collections",
         selectedCollectionIndex: 0,
         selectedRecordIndex: 0,
-        status: `Connected to ${action.connectionName}.`,
+        loading: false,
+        error: null,
+        collections: action.data.collections,
+        records: action.data.records,
+        inspectedRecord: null,
+        recordCursor: action.data.recordCursor,
+        status:
+          action.data.collections.length === 0
+            ? `Connected to ${action.connectionName}. No collections found.`
+            : `Connected to ${action.connectionName}. Loaded ${action.data.collections.length} collections.`,
       };
-    }
+
+    case "CONNECT_FAILURE":
+      return {
+        ...state,
+        loading: false,
+        error: action.error,
+        status: action.error,
+      };
 
     case "BACK_TO_CONNECTIONS":
       return {
         ...state,
         screen: "connections",
         focusedPanel: "collections",
+        collections: [],
+        records: [],
+        inspectedRecord: null,
+        loading: false,
+        error: null,
         status: "Choose a connection.",
       };
 
@@ -115,63 +163,78 @@ function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
 
-    case "MOVE_IN_FOCUSED_PANEL": {
-      if (state.focusedPanel === "collections") {
-        const selectedCollectionIndex = clamp(
-          state.selectedCollectionIndex + action.delta,
-          0,
-          action.collectionCount - 1,
-        );
-        const collection = mockCollections[selectedCollectionIndex] ?? mockCollections[0]!;
-
-        return {
-          ...state,
-          selectedCollectionIndex,
-          selectedRecordIndex: 0,
-          status: `Selected collection ${collection.name}.`,
-        };
-      }
-
-      if (state.focusedPanel === "records") {
-        const selectedRecordIndex = clamp(state.selectedRecordIndex + action.delta, 0, action.recordCount - 1);
-
-        return {
-          ...state,
-          selectedRecordIndex,
-          status: "Selected record updated.",
-        };
-      }
-
-      return state;
-    }
-
-    case "SELECT_CURRENT": {
-      if (state.focusedPanel === "collections") {
-        const collection = mockCollections[state.selectedCollectionIndex] ?? mockCollections[0]!;
-
-        return {
-          ...state,
-          selectedRecordIndex: 0,
-          focusedPanel: "records",
-          status: `Browsing records in ${collection.name}.`,
-        };
-      }
-
-      if (state.focusedPanel === "records" && action.recordCount > 0) {
-        return {
-          ...state,
-          focusedPanel: "inspector",
-          status: "Inspector focused for selected record.",
-        };
-      }
-
-      return state;
-    }
-
-    case "REFRESH":
+    case "SELECT_COLLECTION_REQUEST":
       return {
         ...state,
-        status: "Mock data refreshed.",
+        selectedCollectionIndex: action.index,
+        selectedRecordIndex: 0,
+        records: [],
+        inspectedRecord: null,
+        loading: true,
+        error: null,
+        status: `Loading records from ${action.collectionName}...`,
+      };
+
+    case "SELECT_COLLECTION_SUCCESS":
+      return {
+        ...state,
+        selectedCollectionIndex: action.index,
+        selectedRecordIndex: 0,
+        records: action.page.records,
+        recordCursor: action.page.nextCursor,
+        inspectedRecord: null,
+        loading: false,
+        error: null,
+        status: `Loaded ${action.page.records.length} records from ${action.collectionName}.`,
+      };
+
+    case "MOVE_RECORD":
+      if (action.recordCount === 0) {
+        return {
+          ...state,
+          selectedRecordIndex: 0,
+          inspectedRecord: null,
+          status: "No records loaded.",
+        };
+      }
+
+      return {
+        ...state,
+        selectedRecordIndex: clamp(state.selectedRecordIndex + action.delta, 0, action.recordCount - 1),
+        inspectedRecord: null,
+        status: "Selected record updated. Press Enter to inspect.",
+      };
+
+    case "INSPECT_RECORD_REQUEST":
+      return {
+        ...state,
+        loading: true,
+        error: null,
+        status: `Loading ${action.recordId}...`,
+      };
+
+    case "INSPECT_RECORD_SUCCESS":
+      return {
+        ...state,
+        focusedPanel: "inspector",
+        inspectedRecord: action.record,
+        loading: false,
+        error: null,
+        status: `Inspecting ${action.record.id}.`,
+      };
+
+    case "LOAD_FAILURE":
+      return {
+        ...state,
+        loading: false,
+        error: action.error,
+        status: action.error,
+      };
+
+    case "REFRESH_EMPTY":
+      return {
+        ...state,
+        status: "No collection selected.",
       };
 
     case "TOGGLE_HELP":
@@ -182,19 +245,100 @@ function appReducer(state: AppState, action: AppAction): AppState {
   }
 }
 
-interface AppProps {
-  connectionState: ConnectionState;
-}
-
-export function App({ connectionState }: AppProps) {
+export function App({
+  connectionState,
+  createAdapter = createDefaultAdapter,
+  pageSize = defaultPageSize,
+}: AppProps) {
   const renderer = useRenderer();
+  const adapterRef = useRef<VectorDBAdapter | null>(null);
   const connections = connectionState.connections;
   const [state, dispatch] = useReducer(appReducer, connections.length, createInitialState);
 
   const selectedConnection = connections[state.selectedConnectionIndex] ?? null;
-  const selectedCollection = mockCollections[state.selectedCollectionIndex] ?? mockCollections[0]!;
-  const records = selectedCollection.records;
-  const selectedRecord = records[state.selectedRecordIndex] ?? null;
+  const selectedCollection = state.collections[state.selectedCollectionIndex] ?? null;
+  const selectedRecord = state.records[state.selectedRecordIndex] ?? null;
+
+  async function disconnectCurrentAdapter() {
+    await adapterRef.current?.disconnect();
+    adapterRef.current = null;
+  }
+
+  function connectSelectedConnection() {
+    dispatch({ type: "CONNECT_REQUEST", connectionName: selectedConnection?.name ?? null });
+
+    if (selectedConnection === null) {
+      return;
+    }
+
+    void (async () => {
+      try {
+        await disconnectCurrentAdapter();
+        const adapter = await createAdapter(selectedConnection);
+        adapterRef.current = adapter;
+        const data = await loadInitialBrowserData(adapter, { pageSize });
+        dispatch({ type: "CONNECT_SUCCESS", connectionName: selectedConnection.name, data });
+      } catch (error) {
+        await disconnectCurrentAdapter().catch(() => {
+          adapterRef.current = null;
+        });
+        dispatch({ type: "CONNECT_FAILURE", error: toErrorMessage(error) });
+      }
+    })();
+  }
+
+  function selectCollectionByIndex(index: number) {
+    const adapter = adapterRef.current;
+    const collection = state.collections[index];
+
+    if (adapter === null || collection === undefined) {
+      dispatch({ type: "REFRESH_EMPTY" });
+      return;
+    }
+
+    dispatch({ type: "SELECT_COLLECTION_REQUEST", index, collectionName: collection.name });
+    void (async () => {
+      try {
+        const page = await loadCollectionRecords(adapter, collection.name, { pageSize });
+        dispatch({ type: "SELECT_COLLECTION_SUCCESS", index, collectionName: collection.name, page });
+      } catch (error) {
+        dispatch({ type: "LOAD_FAILURE", error: toErrorMessage(error) });
+      }
+    })();
+  }
+
+  function moveCollection(delta: number) {
+    if (state.collections.length === 0) {
+      dispatch({ type: "REFRESH_EMPTY" });
+      return;
+    }
+
+    const index = clamp(state.selectedCollectionIndex + delta, 0, state.collections.length - 1);
+    selectCollectionByIndex(index);
+  }
+
+  function inspectSelectedRecord() {
+    const adapter = adapterRef.current;
+
+    if (adapter === null || selectedCollection === null || selectedRecord === null) {
+      dispatch({ type: "LOAD_FAILURE", error: "No record selected." });
+      return;
+    }
+
+    dispatch({ type: "INSPECT_RECORD_REQUEST", recordId: selectedRecord.id });
+    void (async () => {
+      try {
+        const record = await loadRecordDetails(adapter, selectedCollection.name, selectedRecord.id);
+        dispatch({ type: "INSPECT_RECORD_SUCCESS", record });
+      } catch (error) {
+        dispatch({ type: "LOAD_FAILURE", error: toErrorMessage(error) });
+      }
+    })();
+  }
+
+  function refreshCurrentCollection() {
+    selectCollectionByIndex(state.selectedCollectionIndex);
+  }
 
   useKeyboard((key) => {
     if (key.eventType === "release") {
@@ -211,6 +355,10 @@ export function App({ connectionState }: AppProps) {
       return;
     }
 
+    if (state.loading) {
+      return;
+    }
+
     if (state.screen === "connections") {
       if (key.name === "down" || key.name === "j") {
         dispatch({ type: "MOVE_CONNECTION", delta: 1, connectionCount: connections.length });
@@ -223,7 +371,7 @@ export function App({ connectionState }: AppProps) {
       }
 
       if (key.name === "enter" || key.name === "return") {
-        dispatch({ type: "CONNECT_SELECTED", connectionName: selectedConnection?.name ?? null });
+        connectSelectedConnection();
       }
 
       return;
@@ -235,37 +383,44 @@ export function App({ connectionState }: AppProps) {
     }
 
     if (key.name === "c") {
+      void disconnectCurrentAdapter();
       dispatch({ type: "BACK_TO_CONNECTIONS" });
       return;
     }
 
     if (key.name === "r") {
-      dispatch({ type: "REFRESH" });
+      refreshCurrentCollection();
       return;
     }
 
     if (key.name === "enter" || key.name === "return") {
-      dispatch({ type: "SELECT_CURRENT", recordCount: records.length });
+      if (state.focusedPanel === "collections") {
+        dispatch({ type: "CYCLE_FOCUS", delta: 1 });
+        return;
+      }
+
+      if (state.focusedPanel === "records") {
+        inspectSelectedRecord();
+      }
+
       return;
     }
 
     if (key.name === "down" || key.name === "j") {
-      dispatch({
-        type: "MOVE_IN_FOCUSED_PANEL",
-        delta: 1,
-        collectionCount: mockCollections.length,
-        recordCount: records.length,
-      });
+      if (state.focusedPanel === "collections") {
+        moveCollection(1);
+      } else if (state.focusedPanel === "records") {
+        dispatch({ type: "MOVE_RECORD", delta: 1, recordCount: state.records.length });
+      }
       return;
     }
 
     if (key.name === "up" || key.name === "k") {
-      dispatch({
-        type: "MOVE_IN_FOCUSED_PANEL",
-        delta: -1,
-        collectionCount: mockCollections.length,
-        recordCount: records.length,
-      });
+      if (state.focusedPanel === "collections") {
+        moveCollection(-1);
+      } else if (state.focusedPanel === "records") {
+        dispatch({ type: "MOVE_RECORD", delta: -1, recordCount: state.records.length });
+      }
     }
   });
 
@@ -281,29 +436,30 @@ export function App({ connectionState }: AppProps) {
         />
       ) : (
         <MainView
-          collections={mockCollections}
+          collectionDimensions={selectedCollection?.dimensions ?? 0}
+          collections={state.collections}
           focusedPanel={state.focusedPanel}
-          records={records}
+          inspectedRecord={state.inspectedRecord}
+          records={state.records}
           selectedCollectionIndex={state.selectedCollectionIndex}
-          selectedRecord={selectedRecord}
           selectedRecordIndex={state.selectedRecordIndex}
         />
       )}
 
       {state.showHelp ? <HelpOverlay screen={state.screen} /> : null}
-      <StatusBar focusedPanel={state.focusedPanel} screen={state.screen} status={state.status} />
+      <StatusBar focusedPanel={state.focusedPanel} loading={state.loading} screen={state.screen} status={state.status} />
     </box>
   );
 }
 
 interface HeaderProps {
   connection: ConnectionProfile | null;
-  collection: CollectionDataset;
+  collection: Collection | null;
   screen: Screen;
 }
 
 function Header({ connection, collection, screen }: HeaderProps) {
-  const location = screen === "connections" ? "choose connection" : collection.name;
+  const location = screen === "connections" ? "choose connection" : collection?.name ?? "no collection";
   const endpoint = connection === null ? "no connection" : `${connection.provider}://${connection.url.replace(/^https?:\/\//, "")}`;
 
   return (
@@ -314,20 +470,22 @@ function Header({ connection, collection, screen }: HeaderProps) {
 }
 
 interface MainViewProps {
-  collections: CollectionDataset[];
+  collectionDimensions: number;
+  collections: Collection[];
   focusedPanel: Panel;
+  inspectedRecord: VectorRecord | null;
   records: VectorRecord[];
   selectedCollectionIndex: number;
-  selectedRecord: VectorRecord | null;
   selectedRecordIndex: number;
 }
 
 function MainView({
+  collectionDimensions,
   collections,
   focusedPanel,
+  inspectedRecord,
   records,
   selectedCollectionIndex,
-  selectedRecord,
   selectedRecordIndex,
 }: MainViewProps) {
   return (
@@ -338,8 +496,13 @@ function MainView({
         selectedIndex={selectedCollectionIndex}
       />
       <box flexGrow={1} flexDirection="column">
-        <RecordTable focused={focusedPanel === "records"} records={records} selectedIndex={selectedRecordIndex} />
-        <Inspector focused={focusedPanel === "inspector"} record={selectedRecord} />
+        <RecordTable
+          collectionDimensions={collectionDimensions}
+          focused={focusedPanel === "records"}
+          records={records}
+          selectedIndex={selectedRecordIndex}
+        />
+        <Inspector collectionDimensions={collectionDimensions} focused={focusedPanel === "inspector"} record={inspectedRecord} />
       </box>
     </box>
   );
@@ -372,7 +535,7 @@ function PanelFrame({ children, focused, height, title, width, flexGrow }: Panel
 }
 
 interface CollectionPanelProps {
-  collections: CollectionDataset[];
+  collections: Collection[];
   focused: boolean;
   selectedIndex: number;
 }
@@ -381,6 +544,7 @@ function CollectionPanel({ collections, focused, selectedIndex }: CollectionPane
   return (
     <PanelFrame focused={focused} title="Collections" width={30}>
       <box flexDirection="column" flexGrow={1}>
+        {collections.length === 0 ? <text fg={colors.muted}>No collections.</text> : null}
         {collections.map((collection, index) => {
           const selected = index === selectedIndex;
           const line = `${selected ? "> " : "  "}${pad(collection.name, 12)} ${pad(formatCount(collection.count), 5)} ${collection.dimensions}d`;
@@ -397,21 +561,23 @@ function CollectionPanel({ collections, focused, selectedIndex }: CollectionPane
 }
 
 interface RecordTableProps {
+  collectionDimensions: number;
   focused: boolean;
   records: VectorRecord[];
   selectedIndex: number;
 }
 
-function RecordTable({ focused, records, selectedIndex }: RecordTableProps) {
+function RecordTable({ collectionDimensions, focused, records, selectedIndex }: RecordTableProps) {
   const header = useMemo(() => `${pad("ID", 14)} ${pad("Dims", 5)} Metadata`, []);
 
   return (
     <PanelFrame focused={focused} flexGrow={1} title="Records">
       <text fg={colors.accent}>{header}</text>
       <box flexDirection="column" flexGrow={1}>
+        {records.length === 0 ? <text fg={colors.muted}>No records loaded.</text> : null}
         {records.map((record, index) => {
           const selected = index === selectedIndex;
-          const line = `${selected ? "> " : "  "}${pad(record.id, 12)} ${pad(`${record.dimensions}`, 5)} ${metadataPreview(record.metadata, 22)}`;
+          const line = `${selected ? "> " : "  "}${pad(record.id, 12)} ${pad(`${collectionDimensions}`, 5)} ${metadataPreview(record.metadata, 22)}`;
 
           return (
             <text key={record.id} fg={selected ? colors.text : colors.muted} bg={selected ? colors.selectedBg : undefined}>
@@ -425,31 +591,33 @@ function RecordTable({ focused, records, selectedIndex }: RecordTableProps) {
 }
 
 interface InspectorProps {
+  collectionDimensions: number;
   focused: boolean;
   record: VectorRecord | null;
 }
 
-function Inspector({ focused, record }: InspectorProps) {
+function Inspector({ collectionDimensions, focused, record }: InspectorProps) {
   if (record === null) {
     return (
       <PanelFrame focused={focused} height={13} title="Inspector">
-        <text fg={colors.muted}>No record selected.</text>
+        <text fg={colors.muted}>Press Enter on a record to inspect it.</text>
       </PanelFrame>
     );
   }
 
   const metadataEntries = Object.entries(record.metadata);
+  const vectorPreview = record.vector === null ? "not returned" : `[${truncate(formatVectorPreview(record.vector), 40)}, ...]`;
 
   return (
     <PanelFrame focused={focused} height={13} title="Inspector">
       <text fg={colors.text}>ID: {record.id}</text>
-      <text fg={colors.text}>Dims: {record.dimensions}</text>
+      <text fg={colors.text}>Dims: {collectionDimensions}</text>
       <text fg={colors.text}>Metadata:</text>
       {metadataEntries.slice(0, 5).map(([key, value]) => (
         <text key={key} fg={colors.muted}>{`  ${key}: ${truncate(formatMetadataValue(value), 32)}`}</text>
       ))}
       <text fg={colors.text}>Vector preview:</text>
-      <text fg={colors.muted}>{`  [${truncate(formatVectorPreview(record.vector), 40)}, ...]`}</text>
+      <text fg={colors.muted}>{`  ${vectorPreview}`}</text>
     </PanelFrame>
   );
 }
@@ -462,7 +630,7 @@ function HelpOverlay({ screen }: HelpOverlayProps) {
   const help =
     screen === "connections"
       ? "Connections: j/k move | Enter connect | ? help | q quit"
-      : "Main: Tab focus | j/k move | Enter select/inspect | r refresh | c connections | ? help | q quit";
+      : "Main: Tab focus | j/k move | Enter inspect | r refresh | c connections | ? help | q quit";
 
   return (
     <box border borderColor={colors.accent} paddingX={1} height={3} alignItems="center">
@@ -473,16 +641,22 @@ function HelpOverlay({ screen }: HelpOverlayProps) {
 
 interface StatusBarProps {
   focusedPanel: Panel;
+  loading: boolean;
   screen: Screen;
   status: string;
 }
 
-function StatusBar({ focusedPanel, screen, status }: StatusBarProps) {
+function StatusBar({ focusedPanel, loading, screen, status }: StatusBarProps) {
   const mode = screen === "connections" ? "connections" : `main:${focusedPanel}`;
+  const state = loading ? "loading" : "ready";
 
   return (
     <box border borderColor={colors.border} height={3} paddingX={1} alignItems="center">
-      <text fg={colors.text}>{`${mode}  ${status}`}</text>
+      <text fg={colors.text}>{`${mode}  ${state}  ${status}`}</text>
     </box>
   );
+}
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

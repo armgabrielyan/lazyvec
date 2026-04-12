@@ -25,7 +25,7 @@ export interface QdrantClientLike {
     collectionName: string,
     request: {
       limit: number;
-      offset?: string;
+      offset?: QdrantPointId;
       with_payload: true;
       with_vector: boolean;
     },
@@ -36,7 +36,7 @@ export interface QdrantClientLike {
   retrieve(
     collectionName: string,
     request: {
-      ids: string[];
+      ids: QdrantPointId[];
       with_payload: true;
       with_vector: true;
     },
