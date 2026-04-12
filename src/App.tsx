@@ -278,15 +278,21 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         status: "",
       };
 
-    case "INSPECT_RECORD_SUCCESS":
+    case "INSPECT_RECORD_SUCCESS": {
+      const records = state.records.map((r) =>
+        r.id === action.record.id ? { ...r, metadata: action.record.metadata } : r,
+      );
+
       return {
         ...state,
         focusedPanel: "inspector",
         inspectedRecord: action.record,
+        records,
         loading: false,
         error: null,
         status: "",
       };
+    }
 
     case "LOAD_FAILURE":
       return {
@@ -638,9 +644,6 @@ function MainView({
   selectedCollectionIndex,
   selectedRecordIndex,
 }: MainViewProps) {
-  const { width } = useTerminalDimensions();
-  const recordPanelWidth = Math.max(40, width - collectionPanelWidth - 4);
-
   return (
     <box flexGrow={1} flexDirection="row">
       <CollectionPanel
@@ -652,7 +655,6 @@ function MainView({
       />
       <box flexGrow={1} flexDirection="column">
         <RecordTable
-          contentWidth={recordPanelWidth}
           focused={focusedPanel === "records"}
           loading={loading}
           records={records}
@@ -728,15 +730,15 @@ function CollectionPanel({ collections, focused, loading, selectedIndex, width }
 }
 
 interface RecordTableProps {
-  contentWidth: number;
+
   focused: boolean;
   loading: boolean;
   records: VectorRecord[];
   selectedIndex: number;
 }
 
-function RecordTable({ contentWidth, focused, loading, records, selectedIndex }: RecordTableProps) {
-  const header = useMemo(() => formatRecordTableHeader(contentWidth), [contentWidth]);
+function RecordTable({ focused, loading, records, selectedIndex }: RecordTableProps) {
+  const header = useMemo(() => formatRecordTableHeader(), []);
   const { height } = useTerminalDimensions();
   const visibleRecords = visibleRecordWindow(records, selectedIndex, recordTableVisibleRowCount(height));
   const emptyMessage = recordTableEmptyMessage({
@@ -752,7 +754,7 @@ function RecordTable({ contentWidth, focused, loading, records, selectedIndex }:
         {visibleRecords.records.map((record, visibleIndex) => {
           const index = visibleRecords.startIndex + visibleIndex;
           const selected = index === selectedIndex;
-          const line = formatRecordTableRow(record, selected, contentWidth);
+          const line = formatRecordTableRow(record, selected);
 
           return (
             <text key={`${record.id}-${index}`} fg={selected ? colors.text : colors.muted} bg={selected ? colors.selectedBg : undefined}>

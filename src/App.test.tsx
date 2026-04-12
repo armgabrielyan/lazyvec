@@ -117,8 +117,8 @@ function createFakeAdapter(): VectorDBAdapter {
 }
 
 async function flushAsyncRender(renderOnce: () => Promise<void>) {
-  for (let index = 0; index < 5; index += 1) {
-    await Promise.resolve();
+  for (let index = 0; index < 10; index += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
     await renderOnce();
   }
 }
@@ -172,6 +172,38 @@ describe("app reducer record pagination", () => {
     expect(next.records).toEqual(connected.records);
     expect(next.recordCursor).toBeUndefined();
     expect(next.status).toBe("End of collection.");
+  });
+});
+
+describe("app reducer record inspection", () => {
+  test("updates the record in the list with full metadata from inspection", () => {
+    const connected = appReducer(createInitialState(1), {
+      type: "CONNECT_SUCCESS",
+      connectionName: "local-qdrant",
+      data: {
+        ...initialData,
+        records: [
+          { id: "1", metadata: { name: "Chris Dyer" }, vector: null },
+          { id: "2", metadata: { name: "Catherine Hyde" }, vector: null },
+        ],
+      },
+    });
+
+    const inspected = appReducer(connected, {
+      type: "INSPECT_RECORD_SUCCESS",
+      record: {
+        id: "1",
+        metadata: { name: "Chris Dyer", url: "/styles/chris-dyer", tag: "art" },
+        vector: [0.1, 0.2],
+      },
+    });
+
+    expect(inspected.records[0]?.metadata).toEqual({
+      name: "Chris Dyer",
+      url: "/styles/chris-dyer",
+      tag: "art",
+    });
+    expect(inspected.records[1]?.metadata).toEqual({ name: "Catherine Hyde" });
   });
 });
 
@@ -261,10 +293,11 @@ describe("App OpenTUI render", () => {
       await testSetup.renderOnce();
     });
 
-    await act(async () => {
+    act(() => {
       testSetup.mockInput.pressEnter();
-      await flushAsyncRender(testSetup.renderOnce);
     });
+
+    await flushAsyncRender(testSetup.renderOnce);
 
     const frame = testSetup.captureCharFrame();
     expect(frame).toContain("conn");

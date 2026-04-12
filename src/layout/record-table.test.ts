@@ -2,15 +2,13 @@ import { describe, expect, test } from "bun:test";
 import {
   formatRecordTableHeader,
   formatRecordTableRow,
-  recordTableLabelWidth,
   metadataLabel,
-  metadataSummary,
   recordTableVisibleRowCount,
   visibleRecordWindow,
 } from "./record-table";
 
 describe("record table layout", () => {
-  test("formats rows with a label and payload field count", () => {
+  test("formats rows with ID and label", () => {
     expect(
       formatRecordTableRow(
         {
@@ -25,25 +23,11 @@ describe("record table layout", () => {
         },
         true,
       ),
-    ).toBe("> 49           Chris Dyer                   4 fields");
+    ).toBe("> 49           Chris Dyer");
   });
 
-  test("widens the label column when the records panel has room", () => {
-    const record = {
-      id: "49",
-      metadata: {
-        file_name: "662a3ac7847574fa510569_Chris_Dyer_V6_p.jpeg",
-        url: "/styles/chris-dyer",
-      },
-      vector: null,
-    };
-
-    expect(recordTableLabelWidth(56)).toBe(28);
-    expect(recordTableLabelWidth(120)).toBe(80);
-    expect(formatRecordTableHeader(120)).toBe(`${"ID".padEnd(14)} ${"Label".padEnd(80)} Payload`);
-    expect(formatRecordTableRow(record, true, 120)).toBe(
-      `> 49           ${"662a3ac7847574fa510569_Chris_Dyer_V6_p.jpeg".padEnd(80)} 2 fields`,
-    );
+  test("header matches row column layout", () => {
+    expect(formatRecordTableHeader()).toBe("ID             Label");
   });
 
   test("finds useful metadata labels from preferred keys and regex patterns", () => {
@@ -55,13 +39,6 @@ describe("record table layout", () => {
 
   test("does not use noisy long fields as labels", () => {
     expect(metadataLabel({ image_url: "https://example.com/image.png", payload: { nested: true } })).toBe("-");
-  });
-
-  test("summarizes payloads without rendering raw JSON", () => {
-    expect(metadataSummary({})).toBe("empty");
-    expect(metadataSummary({ name: "Chris Dyer" })).toBe("1 field");
-    expect(metadataSummary({ nested: { value: true }, image_url: "https://example.com/image.png" })).toBe("2 fields");
-    expect(metadataSummary({ score: 0.42, active: true })).toBe("2 fields");
   });
 
   test("derives a conservative visible row count from terminal height", () => {
