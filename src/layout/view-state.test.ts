@@ -2,10 +2,37 @@ import { describe, expect, test } from "bun:test";
 import {
   collectionPanelEmptyMessage,
   formatStatusBarText,
+  headerParts,
   recordTableEmptyMessage,
+  shouldShowStatusBar,
+  statusTone,
 } from "./view-state";
 
 describe("view state copy", () => {
+  test("formats header segments", () => {
+    expect(
+      headerParts({
+        collectionName: "rag_chunks",
+        endpoint: "qdrant://localhost:6333",
+      }),
+    ).toEqual({
+      appName: "lazyvec",
+      endpoint: "  qdrant://localhost:6333  ",
+      collectionName: "rag_chunks",
+    });
+
+    expect(
+      headerParts({
+        collectionName: null,
+        endpoint: null,
+      }),
+    ).toEqual({
+      appName: "lazyvec",
+      endpoint: null,
+      collectionName: null,
+    });
+  });
+
   test("formats status state with error taking precedence over loading", () => {
     expect(
       formatStatusBarText({
@@ -26,6 +53,19 @@ describe("view state copy", () => {
         status: "Bad Request",
       }),
     ).toBe("main:records  error  Bad Request");
+  });
+
+  test("derives visual status tone", () => {
+    expect(statusTone({ error: "Bad Request", loading: true })).toBe("error");
+    expect(statusTone({ error: null, loading: true })).toBe("loading");
+    expect(statusTone({ error: null, loading: false })).toBe("ready");
+  });
+
+  test("hides idle connection-screen status chrome", () => {
+    expect(shouldShowStatusBar({ error: null, loading: false, screen: "connections" })).toBe(false);
+    expect(shouldShowStatusBar({ error: null, loading: true, screen: "connections" })).toBe(true);
+    expect(shouldShowStatusBar({ error: "Bad Request", loading: false, screen: "connections" })).toBe(true);
+    expect(shouldShowStatusBar({ error: null, loading: false, screen: "main" })).toBe(true);
   });
 
   test("uses explicit empty and loading copy for panels", () => {

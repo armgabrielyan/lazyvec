@@ -11,7 +11,7 @@ import {
   type BrowserData,
 } from "./app-data/browser-data";
 import { ConnectionSelect } from "./components/ConnectionSelect";
-import { clamp, pad } from "./format";
+import { clamp } from "./format";
 import { defaultCollectionPanelWidth, formatCollectionPanelRow, resizeCollectionPanelWidth } from "./layout/collection-panel";
 import {
   formatInspectorMetadataLines,
@@ -21,7 +21,14 @@ import {
   inspectorRecordForSelection,
 } from "./layout/inspector";
 import { formatRecordTableHeader, formatRecordTableRow, recordTableVisibleRowCount, visibleRecordWindow } from "./layout/record-table";
-import { collectionPanelEmptyMessage, formatStatusBarText, recordTableEmptyMessage } from "./layout/view-state";
+import {
+  collectionPanelEmptyMessage,
+  formatStatusBarText,
+  headerParts,
+  recordTableEmptyMessage,
+  shouldShowStatusBar,
+  statusTone,
+} from "./layout/view-state";
 import type { ConnectionProfile, ConnectionState, Panel, Screen } from "./types";
 
 const panelOrder: Panel[] = ["collections", "records", "inspector"];
@@ -32,7 +39,13 @@ const colors = {
   border: "#3f4655",
   error: "#fca5a5",
   focus: "#a7f3d0",
+  headerBg: "#12312f",
+  headerBorder: "#28d7a4",
+  headerLogo: "#f8fafc",
+  headerMuted: "#9fb8ad",
+  loading: "#facc15",
   muted: "#8b95a7",
+  statusBg: "#10151f",
   selectedBg: "#263141",
   text: "#e5e7eb",
   title: "#f8fafc",
@@ -91,7 +104,7 @@ export function createInitialState(connectionCount: number): AppState {
     selectedRecordIndex: 0,
     focusedPanel: "collections",
     showHelp: false,
-    status: connectionCount === 0 ? "Add a connection before connecting." : "Select a connection to start.",
+    status: "",
     loading: false,
     error: null,
     collections: [],
@@ -108,14 +121,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         return {
           ...state,
           selectedConnectionIndex: 0,
-          status: "Add a connection before connecting.",
+          status: "",
         };
       }
 
       return {
         ...state,
         selectedConnectionIndex: clamp(state.selectedConnectionIndex + action.delta, 0, action.connectionCount - 1),
-        status: "Connection selected.",
+        status: "",
       };
     }
 
@@ -123,7 +136,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       if (action.connectionName === null) {
         return {
           ...state,
-          status: "Add a connection before connecting.",
+          status: "",
         };
       }
 
@@ -171,7 +184,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         inspectedRecord: null,
         loading: false,
         error: null,
-        status: "Choose a connection.",
+        status: "",
       };
 
     case "CYCLE_FOCUS": {
@@ -562,13 +575,15 @@ export function App({
       )}
 
       {state.showHelp ? <HelpOverlay screen={state.screen} /> : null}
-      <StatusBar
-        error={state.error}
-        focusedPanel={state.focusedPanel}
-        loading={state.loading}
-        screen={state.screen}
-        status={state.status}
-      />
+      {shouldShowStatusBar({ error: state.error, loading: state.loading, screen: state.screen }) ? (
+        <StatusBar
+          error={state.error}
+          focusedPanel={state.focusedPanel}
+          loading={state.loading}
+          screen={state.screen}
+          status={state.status}
+        />
+      ) : null}
     </box>
   );
 }
@@ -580,12 +595,27 @@ interface HeaderProps {
 }
 
 function Header({ connection, collection, screen }: HeaderProps) {
-  const location = screen === "connections" ? "choose connection" : collection?.name ?? "no collection";
-  const endpoint = connection === null ? "no connection" : `${connection.provider}://${connection.url.replace(/^https?:\/\//, "")}`;
+  const location = screen === "connections" ? null : collection?.name ?? "no collection";
+  const endpoint =
+    connection === null || screen === "connections" ? null : `${connection.provider}://${connection.url.replace(/^https?:\/\//, "")}`;
+  const header = headerParts({
+    collectionName: location,
+    endpoint,
+  });
 
   return (
-    <box border borderColor={colors.border} height={3} paddingX={1} alignItems="center">
-      <text fg={colors.title}>{`lazyvec  ${endpoint}  ${location}`}</text>
+    <box
+      border
+      borderColor={colors.headerBorder}
+      backgroundColor={colors.headerBg}
+      flexDirection="row"
+      height={3}
+      paddingX={1}
+      alignItems="center"
+    >
+      <text fg={colors.headerLogo} bg={colors.headerBg}>{header.appName}</text>
+      {header.endpoint === null ? null : <text fg={colors.headerMuted} bg={colors.headerBg}>{header.endpoint}</text>}
+      {header.collectionName === null ? null : <text fg={colors.focus} bg={colors.headerBg}>{header.collectionName}</text>}
     </box>
   );
 }
@@ -802,9 +832,21 @@ interface StatusBarProps {
 }
 
 function StatusBar({ error, focusedPanel, loading, screen, status }: StatusBarProps) {
+  const tone = statusTone({ error, loading });
+  const toneColor = tone === "error" ? colors.error : tone === "loading" ? colors.loading : colors.focus;
+
   return (
-    <box border borderColor={colors.border} height={3} paddingX={1} alignItems="center">
-      <text fg={error === null ? colors.text : colors.error}>
+    <box
+      border
+      borderColor={toneColor}
+      backgroundColor={colors.statusBg}
+      flexDirection="row"
+      height={3}
+      paddingX={1}
+      alignItems="center"
+    >
+      <text fg={toneColor} bg={colors.statusBg}>| </text>
+      <text fg={toneColor} bg={colors.statusBg}>
         {formatStatusBarText({ error, focusedPanel, loading, screen, status })}
       </text>
     </box>

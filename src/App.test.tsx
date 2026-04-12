@@ -222,6 +222,30 @@ describe("app reducer view copy", () => {
 });
 
 describe("App OpenTUI render", () => {
+  test("keeps idle connection picker chrome minimal", async () => {
+    const testSetup = await testRender(
+      <App
+        connectionState={connectionState}
+        createAdapter={async () => createFakeAdapter()}
+      />,
+      { width: 120, height: 36 },
+    );
+
+    await act(async () => {
+      await testSetup.renderOnce();
+    });
+
+    const frame = testSetup.captureCharFrame();
+    expect(frame).toContain("lazyvec");
+    expect(frame).toContain("local-qdrant");
+    expect(frame).not.toContain("choose connection");
+    expect(frame).not.toContain("Select a connection to start.");
+
+    act(() => {
+      testSetup.renderer.destroy();
+    });
+  });
+
   test("renders the main browser view after selecting a connection", async () => {
     const testSetup = await testRender(
       <App
