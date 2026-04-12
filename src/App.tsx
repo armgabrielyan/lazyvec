@@ -11,8 +11,9 @@ import {
   type BrowserData,
 } from "./app-data/browser-data";
 import { ConnectionSelect } from "./components/ConnectionSelect";
-import { clamp, formatMetadataValue, formatVectorPreview, pad, truncate } from "./format";
+import { clamp, pad } from "./format";
 import { defaultCollectionPanelWidth, formatCollectionPanelRow, resizeCollectionPanelWidth } from "./layout/collection-panel";
+import { formatInspectorMetadataLine, formatInspectorVectorPreview, inspectorRecordForSelection } from "./layout/inspector";
 import { formatRecordTableRow, recordTableVisibleRowCount, visibleRecordWindow } from "./layout/record-table";
 import type { ConnectionProfile, ConnectionState, Panel, Screen } from "./types";
 
@@ -318,6 +319,7 @@ export function App({
   const selectedConnection = connections[state.selectedConnectionIndex] ?? null;
   const selectedCollection = state.collections[state.selectedCollectionIndex] ?? null;
   const selectedRecord = state.records[state.selectedRecordIndex] ?? null;
+  const inspectorRecord = inspectorRecordForSelection(state.inspectedRecord, selectedRecord);
 
   async function disconnectCurrentAdapter() {
     await adapterRef.current?.disconnect();
@@ -540,7 +542,7 @@ export function App({
           collectionPanelWidth={state.collectionPanelWidth}
           collections={state.collections}
           focusedPanel={state.focusedPanel}
-          inspectedRecord={state.inspectedRecord}
+          inspectedRecord={inspectorRecord}
           records={state.records}
           selectedCollectionIndex={state.selectedCollectionIndex}
           selectedRecordIndex={state.selectedRecordIndex}
@@ -601,7 +603,6 @@ function MainView({
       />
       <box flexGrow={1} flexDirection="column">
         <RecordTable
-          collectionDimensions={collectionDimensions}
           focused={focusedPanel === "records"}
           records={records}
           selectedIndex={selectedRecordIndex}
@@ -666,14 +667,13 @@ function CollectionPanel({ collections, focused, selectedIndex, width }: Collect
 }
 
 interface RecordTableProps {
-  collectionDimensions: number;
   focused: boolean;
   records: VectorRecord[];
   selectedIndex: number;
 }
 
-function RecordTable({ collectionDimensions, focused, records, selectedIndex }: RecordTableProps) {
-  const header = useMemo(() => `${pad("ID", 14)} ${pad("Dims", 5)} Metadata`, []);
+function RecordTable({ focused, records, selectedIndex }: RecordTableProps) {
+  const header = useMemo(() => `${pad("ID", 14)} ${pad("Label", 28)} Payload`, []);
   const { height } = useTerminalDimensions();
   const visibleRecords = visibleRecordWindow(records, selectedIndex, recordTableVisibleRowCount(height));
 
@@ -685,7 +685,7 @@ function RecordTable({ collectionDimensions, focused, records, selectedIndex }: 
         {visibleRecords.records.map((record, visibleIndex) => {
           const index = visibleRecords.startIndex + visibleIndex;
           const selected = index === selectedIndex;
-          const line = formatRecordTableRow(record, collectionDimensions, selected);
+          const line = formatRecordTableRow(record, selected);
 
           return (
             <text key={`${record.id}-${index}`} fg={selected ? colors.text : colors.muted} bg={selected ? colors.selectedBg : undefined}>
@@ -708,13 +708,13 @@ function Inspector({ collectionDimensions, focused, record }: InspectorProps) {
   if (record === null) {
     return (
       <PanelFrame focused={focused} height={13} title="Inspector">
-        <text fg={colors.muted}>Press Enter on a record to inspect it.</text>
+        <text fg={colors.muted}>Select a record to inspect payload.</text>
       </PanelFrame>
     );
   }
 
   const metadataEntries = Object.entries(record.metadata);
-  const vectorPreview = record.vector === null ? "not returned" : `[${truncate(formatVectorPreview(record.vector), 40)}, ...]`;
+  const vectorPreview = formatInspectorVectorPreview(record.vector);
 
   return (
     <PanelFrame focused={focused} height={13} title="Inspector">
@@ -722,7 +722,7 @@ function Inspector({ collectionDimensions, focused, record }: InspectorProps) {
       <text fg={colors.text}>Dims: {collectionDimensions}</text>
       <text fg={colors.text}>Metadata:</text>
       {metadataEntries.slice(0, 5).map(([key, value]) => (
-        <text key={key} fg={colors.muted}>{`  ${key}: ${truncate(formatMetadataValue(value), 32)}`}</text>
+        <text key={key} fg={colors.muted}>{formatInspectorMetadataLine(key, value)}</text>
       ))}
       <text fg={colors.text}>Vector preview:</text>
       <text fg={colors.muted}>{`  ${vectorPreview}`}</text>

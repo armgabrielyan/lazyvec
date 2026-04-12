@@ -1,14 +1,54 @@
 import type { VectorRecord } from "../adapters/types";
-import { clamp, metadataPreview, pad } from "../format";
+import { clamp, pad } from "../format";
 
 const nonRecordRowHeight = 22;
+const labelWidth = 28;
+const exactLabelKeys = ["name", "title", "label", "caption", "file_name", "filename", "source", "url", "path", "slug"];
+const labelKeyPatterns = [
+  /(^|[_-])(display[_-]?name|name|title|label|caption)($|[_-])/i,
+  /(^|[_-])(file[_-]?name|filename|source|url|path|slug)($|[_-])/i,
+];
+const noisyLabelKeyPattern = /(^|[_-])(image[_-]?url|thumbnail|avatar|icon|vector|embedding|text|content|body)($|[_-])/i;
 
 export function formatRecordTableRow(
   record: VectorRecord,
-  collectionDimensions: number,
   selected: boolean,
 ): string {
-  return `${selected ? "> " : "  "}${pad(record.id, 12)} ${pad(`${collectionDimensions}`, 5)} ${metadataPreview(record.metadata, 22)}`;
+  return `${selected ? "> " : "  "}${pad(record.id, 12)} ${pad(metadataLabel(record.metadata), labelWidth)} ${metadataSummary(record.metadata)}`;
+}
+
+export function metadataLabel(metadata: Record<string, unknown>): string {
+  for (const key of exactLabelKeys) {
+    const value = metadata[key];
+    const label = labelPart(value);
+
+    if (label !== null) {
+      return label;
+    }
+  }
+
+  for (const [key, value] of Object.entries(metadata)) {
+    if (noisyLabelKeyPattern.test(key)) {
+      continue;
+    }
+
+    if (!labelKeyPatterns.some((pattern) => pattern.test(key))) {
+      continue;
+    }
+
+    const label = labelPart(value);
+
+    if (label !== null) {
+      return label;
+    }
+  }
+
+  return "-";
+}
+
+export function metadataSummary(metadata: Record<string, unknown>): string {
+  const fieldCount = Object.keys(metadata).length;
+  return fieldCount === 0 ? "empty" : `${fieldCount} ${fieldCount === 1 ? "field" : "fields"}`;
 }
 
 export function recordTableVisibleRowCount(terminalHeight: number): number {
@@ -38,4 +78,17 @@ export function visibleRecordWindow<T>(
     records: records.slice(startIndex, startIndex + rowCount),
     startIndex,
   };
+}
+
+function labelPart(value: unknown): string | null {
+  if (typeof value === "string") {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    return normalized.length === 0 ? null : normalized;
+  }
+
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  return null;
 }
