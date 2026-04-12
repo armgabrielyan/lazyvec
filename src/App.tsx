@@ -18,7 +18,7 @@ import {
   formatInspectorVectorPreview,
   inspectorRecordForSelection,
 } from "./layout/inspector";
-import { formatRecordTableHeader, formatRecordTableRow, recordTableVisibleRowCount, visibleRecordWindow } from "./layout/record-table";
+import { formatRecordTableRow, recordTableVisibleRowCount, visibleRecordWindow } from "./layout/record-table";
 import {
   collectionPanelEmptyMessage,
   formatStatusBarText,
@@ -190,6 +190,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         focusedPanel,
+        inspectedRecord: null,
         error: null,
         status: "",
       };
@@ -644,6 +645,13 @@ function MainView({
   selectedCollectionIndex,
   selectedRecordIndex,
 }: MainViewProps) {
+  const { width, height } = useTerminalDimensions();
+  const recordContentWidth = Math.max(40, width - collectionPanelWidth - 4);
+  const headerHeight = 3;
+  const availableHeight = Math.max(10, height - headerHeight);
+  const inspectorHeight = Math.max(5, Math.floor(availableHeight * 0.35));
+  const recordsHeight = availableHeight - inspectorHeight;
+
   return (
     <box flexGrow={1} flexDirection="row">
       <CollectionPanel
@@ -655,7 +663,9 @@ function MainView({
       />
       <box flexGrow={1} flexDirection="column">
         <RecordTable
+          contentWidth={recordContentWidth}
           focused={focusedPanel === "records"}
+          height={recordsHeight}
           loading={loading}
           records={records}
           selectedIndex={selectedRecordIndex}
@@ -663,6 +673,7 @@ function MainView({
         <Inspector
           collectionDimensions={collectionDimensions}
           focused={focusedPanel === "inspector"}
+          height={inspectorHeight}
           record={inspectedRecord}
         />
       </box>
@@ -730,31 +741,33 @@ function CollectionPanel({ collections, focused, loading, selectedIndex, width }
 }
 
 interface RecordTableProps {
-
+  contentWidth: number;
   focused: boolean;
+  height: number;
   loading: boolean;
   records: VectorRecord[];
   selectedIndex: number;
 }
 
-function RecordTable({ focused, loading, records, selectedIndex }: RecordTableProps) {
-  const header = useMemo(() => formatRecordTableHeader(), []);
-  const { height } = useTerminalDimensions();
-  const visibleRecords = visibleRecordWindow(records, selectedIndex, recordTableVisibleRowCount(height));
+function RecordTable({ contentWidth, focused, height, loading, records, selectedIndex }: RecordTableProps) {
+  const panelChrome = 4;
+  const visibleRows = Math.max(5, height - panelChrome);
+  const visibleRecords = visibleRecordWindow(records, selectedIndex, visibleRows);
   const emptyMessage = recordTableEmptyMessage({
     loading,
     recordCount: records.length,
   });
 
+  const title = `Records (${records.length}) — ID / Label`;
+
   return (
-    <PanelFrame focused={focused} flexGrow={1} title="Records">
-      <text fg={colors.accent}>{header}</text>
+    <PanelFrame focused={focused} height={height} title={title}>
       <box flexDirection="column" flexGrow={1}>
         {emptyMessage === null ? null : <text fg={colors.muted}>{emptyMessage}</text>}
         {visibleRecords.records.map((record, visibleIndex) => {
           const index = visibleRecords.startIndex + visibleIndex;
           const selected = index === selectedIndex;
-          const line = formatRecordTableRow(record, selected);
+          const line = formatRecordTableRow(record, selected, contentWidth);
 
           return (
             <text key={`${record.id}-${index}`} fg={selected ? colors.text : colors.muted} bg={selected ? colors.selectedBg : undefined}>
@@ -770,13 +783,14 @@ function RecordTable({ focused, loading, records, selectedIndex }: RecordTablePr
 interface InspectorProps {
   collectionDimensions: number;
   focused: boolean;
+  height: number;
   record: VectorRecord | null;
 }
 
-function Inspector({ collectionDimensions, focused, record }: InspectorProps) {
+function Inspector({ collectionDimensions, focused, height, record }: InspectorProps) {
   if (record === null) {
     return (
-      <PanelFrame focused={focused} height="35%" title="Inspector">
+      <PanelFrame focused={focused} height={height} title="Inspector">
         <text fg={colors.muted}>Select a record to inspect payload.</text>
       </PanelFrame>
     );
@@ -787,7 +801,7 @@ function Inspector({ collectionDimensions, focused, record }: InspectorProps) {
   const vectorPreview = formatInspectorVectorPreview(record.vector);
 
   return (
-    <PanelFrame focused={focused} height="35%" title="Inspector">
+    <PanelFrame focused={focused} height={height} title="Inspector">
       <text fg={colors.text}>ID: {record.id}</text>
       <text fg={colors.text}>Dims: {collectionDimensions}</text>
       <text fg={colors.text}>Vector: {vectorPreview}</text>

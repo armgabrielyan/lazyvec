@@ -6,11 +6,21 @@ const exactLabelKeys = ["name", "title", "label", "caption", "file_name", "filen
 const labelKeyPatterns = [
   /(^|[_-])(display[_-]?name|name|title|label|caption)($|[_-])/i,
   /(^|[_-])(file[_-]?name|filename|source|url|path|slug)($|[_-])/i,
+  /(^|[_-])(description|summary|category|topic|type|kind|class|group|subject)($|[_-])/i,
+  /(^|[_-])(query|question|input|prefix|suffix|chunk|segment|snippet|excerpt)($|[_-])/i,
+  /(^|[_-])(id|key|ref|code|tag|status|role|author|owner)($|[_-])/i,
 ];
 const noisyLabelKeyPattern = /(^|[_-])(image[_-]?url|thumbnail|avatar|icon|vector|embedding|text|content|body)($|[_-])/i;
 
-export function formatRecordTableRow(record: VectorRecord, selected: boolean): string {
-  return `${selected ? "> " : "  "}${pad(record.id, 12)} ${metadataLabel(record.metadata)}`;
+const idColumnWidth = 15;
+
+export function formatRecordTableRow(record: VectorRecord, selected: boolean, contentWidth?: number): string {
+  const prefix = selected ? "> " : "  ";
+  const id = pad(record.id, 12);
+  const label = metadataLabel(record.metadata);
+  const labelWidth = contentWidth === undefined ? label.length : Math.max(1, contentWidth - idColumnWidth);
+
+  return `${prefix}${id} ${pad(label, labelWidth)}`;
 }
 
 export function formatRecordTableHeader(): string {
@@ -37,6 +47,14 @@ export function metadataLabel(metadata: Record<string, unknown>): string {
       continue;
     }
 
+    const label = labelPart(value);
+
+    if (label !== null) {
+      return label;
+    }
+  }
+
+  for (const value of Object.values(metadata)) {
     const label = labelPart(value);
 
     if (label !== null) {

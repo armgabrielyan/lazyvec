@@ -207,6 +207,35 @@ describe("app reducer record inspection", () => {
   });
 });
 
+describe("app reducer focus cycling", () => {
+  test("clears inspected record when cycling focus so the inspector follows selection", () => {
+    const connected = appReducer(createInitialState(1), {
+      type: "CONNECT_SUCCESS",
+      connectionName: "local-qdrant",
+      data: {
+        ...initialData,
+        records: [
+          { id: "0", metadata: { name: "Chris Dyer" }, vector: null },
+          { id: "1", metadata: { name: "Catherine Hyde" }, vector: null },
+        ],
+      },
+    });
+
+    const inspected = appReducer(connected, {
+      type: "INSPECT_RECORD_SUCCESS",
+      record: {
+        id: "0",
+        metadata: { name: "Chris Dyer" },
+        vector: [0.1, 0.2],
+      },
+    });
+    expect(inspected.inspectedRecord).not.toBeNull();
+
+    const tabbed = appReducer(inspected, { type: "CYCLE_FOCUS", delta: 1 });
+    expect(tabbed.inspectedRecord).toBeNull();
+  });
+});
+
 describe("app reducer view copy", () => {
   test("leaves successful empty-record selection quiet because the records panel shows emptiness", () => {
     const connected = appReducer(createInitialState(1), {

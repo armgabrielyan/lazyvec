@@ -22,7 +22,7 @@ describe("collection panel layout", () => {
   });
 
   test("derives a bounded collection-name column width from the panel width", () => {
-    expect(collectionNameColumnWidth(42)).toBe(24);
+    expect(collectionNameColumnWidth(42)).toBe(22);
     expect(collectionNameColumnWidth(24)).toBe(8);
     expect(collectionNameColumnWidth(90)).toBe(54);
   });
@@ -38,7 +38,7 @@ describe("collection panel layout", () => {
       defaultCollectionPanelWidth,
     );
 
-    expect(row).toBe("> midjourney styles        5.4k  512d ");
+    expect(row).toBe("> midjourney styles      5.4k   512d  ");
     expect(row.length).toBeLessThanOrEqual(collectionPanelContentWidth(defaultCollectionPanelWidth));
   });
 
@@ -53,7 +53,7 @@ describe("collection panel layout", () => {
       minCollectionPanelWidth,
     );
 
-    expect(row).toBe("  very long... 1.2m  1536d");
+    expect(row).toBe("  very lo... 1.2m   1536d ");
     expect(row.length).toBeLessThanOrEqual(collectionPanelContentWidth(minCollectionPanelWidth));
   });
 });

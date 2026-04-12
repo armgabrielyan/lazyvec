@@ -6,7 +6,7 @@ export const maxCollectionPanelWidth = 72;
 
 const collectionPanelResizeStep = 4;
 const collectionPanelHorizontalChromeWidth = 4;
-const collectionRowFixedColumnWidth = 14;
+const collectionRowFixedColumnWidth = 16;
 const minCollectionNameColumnWidth = 8;
 const maxCollectionNameColumnWidth = 54;
 
@@ -45,8 +45,8 @@ export function formatCollectionPanelRow(
 ): string {
   const marker = selected ? "> " : "  ";
   const name = pad(collection.name, collectionNameColumnWidth(panelWidth));
-  const count = pad(formatCount(collection.count), 5);
-  const dimensions = pad(`${collection.dimensions}d`, 5);
+  const count = pad(formatCount(collection.count), 6);
+  const dimensions = pad(`${collection.dimensions}d`, 6);
 
   return `${marker}${name} ${count} ${dimensions}`;
 }
