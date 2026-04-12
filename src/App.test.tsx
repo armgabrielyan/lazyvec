@@ -78,3 +78,50 @@ describe("app reducer record pagination", () => {
     expect(next.status).toBe("End of collection.");
   });
 });
+
+describe("app reducer view copy", () => {
+  test("uses explicit empty-record copy after selecting an empty collection", () => {
+    const connected = appReducer(createInitialState(1), {
+      type: "CONNECT_SUCCESS",
+      connectionName: "local-qdrant",
+      data: initialData,
+    });
+    const next = appReducer(connected, {
+      type: "SELECT_COLLECTION_SUCCESS",
+      index: 0,
+      collectionName: "rag_chunks",
+      page: {
+        records: [],
+        nextCursor: undefined,
+      },
+    });
+
+    expect(next.status).toBe("No records found in rag_chunks.");
+  });
+
+  test("describes Enter as fetching vector details after record movement", () => {
+    const connected = appReducer(createInitialState(1), {
+      type: "CONNECT_SUCCESS",
+      connectionName: "local-qdrant",
+      data: {
+        ...initialData,
+        records: [
+          { id: "1", metadata: {}, vector: null },
+          { id: "2", metadata: {}, vector: null },
+        ],
+      },
+    });
+    const moved = appReducer(connected, {
+      type: "MOVE_RECORD",
+      delta: 1,
+      recordCount: 2,
+    });
+    const loadingDetails = appReducer(moved, {
+      type: "INSPECT_RECORD_REQUEST",
+      recordId: "2",
+    });
+
+    expect(moved.status).toBe("Selected record updated. Press Enter to fetch vector.");
+    expect(loadingDetails.status).toBe("Fetching vector for 2...");
+  });
+});

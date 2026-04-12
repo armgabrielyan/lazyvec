@@ -20,6 +20,7 @@ import {
   inspectorRecordForSelection,
 } from "./layout/inspector";
 import { formatRecordTableRow, recordTableVisibleRowCount, visibleRecordWindow } from "./layout/record-table";
+import { collectionPanelEmptyMessage, formatStatusBarText, recordTableEmptyMessage } from "./layout/view-state";
 import type { ConnectionProfile, ConnectionState, Panel, Screen } from "./types";
 
 const panelOrder: Panel[] = ["collections", "records", "inspector"];
@@ -28,6 +29,7 @@ const defaultPageSize = 50;
 const colors = {
   accent: "#7dd3fc",
   border: "#3f4655",
+  error: "#fca5a5",
   focus: "#a7f3d0",
   muted: "#8b95a7",
   selectedBg: "#263141",
@@ -205,7 +207,10 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         inspectedRecord: null,
         loading: false,
         error: null,
-        status: `Loaded ${action.page.records.length} records from ${action.collectionName}.`,
+        status:
+          action.page.records.length === 0
+            ? `No records found in ${action.collectionName}.`
+            : `Loaded ${action.page.records.length} records from ${action.collectionName}.`,
       };
 
     case "MOVE_RECORD":
@@ -222,7 +227,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         selectedRecordIndex: clamp(state.selectedRecordIndex + action.delta, 0, action.recordCount - 1),
         inspectedRecord: null,
-        status: "Selected record updated. Press Enter to inspect.",
+        status: "Selected record updated. Press Enter to fetch vector.",
       };
 
     case "LOAD_NEXT_RECORDS_REQUEST":
@@ -266,7 +271,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         loading: true,
         error: null,
-        status: `Loading ${action.recordId}...`,
+        status: `Fetching vector for ${action.recordId}...`,
       };
 
     case "INSPECT_RECORD_SUCCESS":
@@ -548,6 +553,7 @@ export function App({
           collections={state.collections}
           focusedPanel={state.focusedPanel}
           inspectedRecord={inspectorRecord}
+          loading={state.loading}
           records={state.records}
           selectedCollectionIndex={state.selectedCollectionIndex}
           selectedRecordIndex={state.selectedRecordIndex}
@@ -555,7 +561,13 @@ export function App({
       )}
 
       {state.showHelp ? <HelpOverlay screen={state.screen} /> : null}
-      <StatusBar focusedPanel={state.focusedPanel} loading={state.loading} screen={state.screen} status={state.status} />
+      <StatusBar
+        error={state.error}
+        focusedPanel={state.focusedPanel}
+        loading={state.loading}
+        screen={state.screen}
+        status={state.status}
+      />
     </box>
   );
 }
@@ -583,6 +595,7 @@ interface MainViewProps {
   collections: Collection[];
   focusedPanel: Panel;
   inspectedRecord: VectorRecord | null;
+  loading: boolean;
   records: VectorRecord[];
   selectedCollectionIndex: number;
   selectedRecordIndex: number;
@@ -594,6 +607,7 @@ function MainView({
   collections,
   focusedPanel,
   inspectedRecord,
+  loading,
   records,
   selectedCollectionIndex,
   selectedRecordIndex,
@@ -603,12 +617,14 @@ function MainView({
       <CollectionPanel
         collections={collections}
         focused={focusedPanel === "collections"}
+        loading={loading}
         width={collectionPanelWidth}
         selectedIndex={selectedCollectionIndex}
       />
       <box flexGrow={1} flexDirection="column">
         <RecordTable
           focused={focusedPanel === "records"}
+          loading={loading}
           records={records}
           selectedIndex={selectedRecordIndex}
         />
@@ -647,15 +663,21 @@ function PanelFrame({ children, focused, height, title, width, flexGrow }: Panel
 interface CollectionPanelProps {
   collections: Collection[];
   focused: boolean;
+  loading: boolean;
   selectedIndex: number;
   width: number;
 }
 
-function CollectionPanel({ collections, focused, selectedIndex, width }: CollectionPanelProps) {
+function CollectionPanel({ collections, focused, loading, selectedIndex, width }: CollectionPanelProps) {
+  const emptyMessage = collectionPanelEmptyMessage({
+    collectionCount: collections.length,
+    loading,
+  });
+
   return (
     <PanelFrame focused={focused} title="Collections" width={width}>
       <box flexDirection="column" flexGrow={1}>
-        {collections.length === 0 ? <text fg={colors.muted}>No collections.</text> : null}
+        {emptyMessage === null ? null : <text fg={colors.muted}>{emptyMessage}</text>}
         {collections.map((collection, index) => {
           const selected = index === selectedIndex;
           const line = formatCollectionPanelRow(collection, selected, width);
@@ -673,20 +695,25 @@ function CollectionPanel({ collections, focused, selectedIndex, width }: Collect
 
 interface RecordTableProps {
   focused: boolean;
+  loading: boolean;
   records: VectorRecord[];
   selectedIndex: number;
 }
 
-function RecordTable({ focused, records, selectedIndex }: RecordTableProps) {
+function RecordTable({ focused, loading, records, selectedIndex }: RecordTableProps) {
   const header = useMemo(() => `${pad("ID", 14)} ${pad("Label", 28)} Payload`, []);
   const { height } = useTerminalDimensions();
   const visibleRecords = visibleRecordWindow(records, selectedIndex, recordTableVisibleRowCount(height));
+  const emptyMessage = recordTableEmptyMessage({
+    loading,
+    recordCount: records.length,
+  });
 
   return (
     <PanelFrame focused={focused} flexGrow={1} title="Records">
       <text fg={colors.accent}>{header}</text>
       <box flexDirection="column" flexGrow={1}>
-        {records.length === 0 ? <text fg={colors.muted}>No records loaded.</text> : null}
+        {emptyMessage === null ? null : <text fg={colors.muted}>{emptyMessage}</text>}
         {visibleRecords.records.map((record, visibleIndex) => {
           const index = visibleRecords.startIndex + visibleIndex;
           const selected = index === selectedIndex;
@@ -753,19 +780,19 @@ function HelpOverlay({ screen }: HelpOverlayProps) {
 }
 
 interface StatusBarProps {
+  error: string | null;
   focusedPanel: Panel;
   loading: boolean;
   screen: Screen;
   status: string;
 }
 
-function StatusBar({ focusedPanel, loading, screen, status }: StatusBarProps) {
-  const mode = screen === "connections" ? "connections" : `main:${focusedPanel}`;
-  const state = loading ? "loading" : "ready";
-
+function StatusBar({ error, focusedPanel, loading, screen, status }: StatusBarProps) {
   return (
     <box border borderColor={colors.border} height={3} paddingX={1} alignItems="center">
-      <text fg={colors.text}>{`${mode}  ${state}  ${status}`}</text>
+      <text fg={error === null ? colors.text : colors.error}>
+        {formatStatusBarText({ error, focusedPanel, loading, screen, status })}
+      </text>
     </box>
   );
 }
