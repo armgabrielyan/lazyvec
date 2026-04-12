@@ -23,9 +23,6 @@ export function formatRecordTableRow(record: VectorRecord, selected: boolean, co
   return `${prefix}${id} ${pad(label, labelWidth)}`;
 }
 
-export function formatRecordTableHeader(): string {
-  return `${pad("ID", 14)} Label`;
-}
 
 
 export function metadataLabel(metadata: Record<string, unknown>): string {

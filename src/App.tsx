@@ -463,8 +463,13 @@ export function App({
       return;
     }
 
-    if (key.name === "escape" && state.showHelp) {
-      dispatch({ type: "TOGGLE_HELP" });
+    if (key.name === "escape") {
+      if (state.showHelp) {
+        dispatch({ type: "TOGGLE_HELP" });
+      } else if (state.screen === "main") {
+        void disconnectCurrentAdapter();
+        dispatch({ type: "BACK_TO_CONNECTIONS" });
+      }
       return;
     }
 
@@ -870,7 +875,7 @@ const mainHelpSections: HelpSection[] = [
     entries: [
       { action: "Next record page", key: "n / PageDown" },
       { action: "Refresh collection", key: "r" },
-      { action: "Back to connections", key: "c" },
+      { action: "Back to connections", key: "Esc / c" },
     ],
   },
   {

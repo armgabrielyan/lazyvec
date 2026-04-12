@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  formatRecordTableHeader,
   formatRecordTableRow,
   metadataLabel,
   recordTableVisibleRowCount,
@@ -39,10 +38,6 @@ describe("record table layout", () => {
     );
     expect(row.length).toBe(40);
     expect(row).toContain("A very long name that ...");
-  });
-
-  test("header matches row column layout", () => {
-    expect(formatRecordTableHeader()).toBe("ID             Label");
   });
 
   test("finds useful metadata labels from preferred keys and regex patterns", () => {

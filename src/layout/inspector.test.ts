@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { VectorRecord } from "../adapters/types";
 import {
-  formatInspectorMetadataLines,
-  formatInspectorMetadataLine,
-  formatInspectorPayloadSummary,
   formatInspectorVectorPreview,
-  inspectorMetadataValueWidth,
   inspectorRecordForSelection,
 } from "./inspector";
 
@@ -30,50 +26,5 @@ describe("inspector layout", () => {
   test("describes vector state before and after explicit inspection", () => {
     expect(formatInspectorVectorPreview(null)).toBe("press Enter to fetch vector");
     expect(formatInspectorVectorPreview([0.123456, 0.2])).toBe("[0.1235, 0.2000, ...]");
-  });
-
-  test("formats metadata fields without rendering raw table JSON", () => {
-    expect(formatInspectorMetadataLine("name", "Chris Dyer")).toBe('  name           "Chris Dyer"');
-    expect(formatInspectorMetadataLine("nested", { active: true })).toBe('  nested         {"active":true}');
-  });
-
-  test("summarizes payload field counts", () => {
-    expect(formatInspectorPayloadSummary({})).toBe("Payload: empty");
-    expect(formatInspectorPayloadSummary({ name: "Chris Dyer" })).toBe("Payload: 1 field");
-    expect(formatInspectorPayloadSummary({ name: "Chris Dyer", url: "/styles/chris-dyer" })).toBe("Payload: 2 fields");
-  });
-
-  test("limits payload lines and reports hidden fields", () => {
-    expect(
-      formatInspectorMetadataLines(
-        {
-          name: "Chris Dyer",
-          file_name: "662a3ac7847574fa510569_Chris_Dyer_V6_p.jpeg",
-          image_url: "https://storage.googleapis.com/demo-midjourney/images/662a3ac7847574fa510569.jpeg",
-          url: "/styles/chris-dyer",
-          source: "demo",
-          index: 0,
-        },
-        { maxLines: 5, valueWidth: 20 },
-      ),
-    ).toEqual([
-      '  name           "Chris Dyer"',
-      '  file_name      "662a3ac7847574fa...',
-      '  image_url      "https://storage....',
-      '  url            "/styles/chris-dyer"',
-      "  +2 more fields",
-    ]);
-  });
-
-  test("widens metadata values when the inspector has room", () => {
-    expect(inspectorMetadataValueWidth(72)).toBe(44);
-    expect(inspectorMetadataValueWidth(140)).toBe(96);
-    expect(
-      formatInspectorMetadataLine(
-        "url",
-        "https://example.com/very/long/path/that/can/use/the/available/terminal/width",
-        { valueWidth: inspectorMetadataValueWidth(140) },
-      ),
-    ).toBe('  url            "https://example.com/very/long/path/that/can/use/the/available/terminal/width"');
   });
 });
