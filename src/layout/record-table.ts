@@ -2,7 +2,9 @@ import type { VectorRecord } from "../adapters/types";
 import { clamp, pad } from "../format";
 
 const nonRecordRowHeight = 22;
-const labelWidth = 28;
+const defaultLabelWidth = 28;
+const maxLabelWidth = 80;
+const nonLabelColumnWidth = 40;
 const exactLabelKeys = ["name", "title", "label", "caption", "file_name", "filename", "source", "url", "path", "slug"];
 const labelKeyPatterns = [
   /(^|[_-])(display[_-]?name|name|title|label|caption)($|[_-])/i,
@@ -13,8 +15,22 @@ const noisyLabelKeyPattern = /(^|[_-])(image[_-]?url|thumbnail|avatar|icon|vecto
 export function formatRecordTableRow(
   record: VectorRecord,
   selected: boolean,
+  contentWidth?: number,
 ): string {
+  const labelWidth = recordTableLabelWidth(contentWidth);
   return `${selected ? "> " : "  "}${pad(record.id, 12)} ${pad(metadataLabel(record.metadata), labelWidth)} ${metadataSummary(record.metadata)}`;
+}
+
+export function formatRecordTableHeader(contentWidth?: number): string {
+  return `${pad("ID", 14)} ${pad("Label", recordTableLabelWidth(contentWidth))} Payload`;
+}
+
+export function recordTableLabelWidth(contentWidth?: number): number {
+  if (contentWidth === undefined) {
+    return defaultLabelWidth;
+  }
+
+  return clamp(contentWidth - nonLabelColumnWidth, defaultLabelWidth, maxLabelWidth);
 }
 
 export function metadataLabel(metadata: Record<string, unknown>): string {

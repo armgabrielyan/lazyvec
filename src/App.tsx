@@ -17,9 +17,10 @@ import {
   formatInspectorMetadataLines,
   formatInspectorPayloadSummary,
   formatInspectorVectorPreview,
+  inspectorMetadataValueWidth,
   inspectorRecordForSelection,
 } from "./layout/inspector";
-import { formatRecordTableRow, recordTableVisibleRowCount, visibleRecordWindow } from "./layout/record-table";
+import { formatRecordTableHeader, formatRecordTableRow, recordTableVisibleRowCount, visibleRecordWindow } from "./layout/record-table";
 import { collectionPanelEmptyMessage, formatStatusBarText, recordTableEmptyMessage } from "./layout/view-state";
 import type { ConnectionProfile, ConnectionState, Panel, Screen } from "./types";
 
@@ -612,6 +613,9 @@ function MainView({
   selectedCollectionIndex,
   selectedRecordIndex,
 }: MainViewProps) {
+  const { width } = useTerminalDimensions();
+  const recordPanelWidth = Math.max(40, width - collectionPanelWidth - 4);
+
   return (
     <box flexGrow={1} flexDirection="row">
       <CollectionPanel
@@ -623,12 +627,18 @@ function MainView({
       />
       <box flexGrow={1} flexDirection="column">
         <RecordTable
+          contentWidth={recordPanelWidth}
           focused={focusedPanel === "records"}
           loading={loading}
           records={records}
           selectedIndex={selectedRecordIndex}
         />
-        <Inspector collectionDimensions={collectionDimensions} focused={focusedPanel === "inspector"} record={inspectedRecord} />
+        <Inspector
+          collectionDimensions={collectionDimensions}
+          contentWidth={recordPanelWidth}
+          focused={focusedPanel === "inspector"}
+          record={inspectedRecord}
+        />
       </box>
     </box>
   );
@@ -694,14 +704,15 @@ function CollectionPanel({ collections, focused, loading, selectedIndex, width }
 }
 
 interface RecordTableProps {
+  contentWidth: number;
   focused: boolean;
   loading: boolean;
   records: VectorRecord[];
   selectedIndex: number;
 }
 
-function RecordTable({ focused, loading, records, selectedIndex }: RecordTableProps) {
-  const header = useMemo(() => `${pad("ID", 14)} ${pad("Label", 28)} Payload`, []);
+function RecordTable({ contentWidth, focused, loading, records, selectedIndex }: RecordTableProps) {
+  const header = useMemo(() => formatRecordTableHeader(contentWidth), [contentWidth]);
   const { height } = useTerminalDimensions();
   const visibleRecords = visibleRecordWindow(records, selectedIndex, recordTableVisibleRowCount(height));
   const emptyMessage = recordTableEmptyMessage({
@@ -717,7 +728,7 @@ function RecordTable({ focused, loading, records, selectedIndex }: RecordTablePr
         {visibleRecords.records.map((record, visibleIndex) => {
           const index = visibleRecords.startIndex + visibleIndex;
           const selected = index === selectedIndex;
-          const line = formatRecordTableRow(record, selected);
+          const line = formatRecordTableRow(record, selected, contentWidth);
 
           return (
             <text key={`${record.id}-${index}`} fg={selected ? colors.text : colors.muted} bg={selected ? colors.selectedBg : undefined}>
@@ -732,11 +743,12 @@ function RecordTable({ focused, loading, records, selectedIndex }: RecordTablePr
 
 interface InspectorProps {
   collectionDimensions: number;
+  contentWidth: number;
   focused: boolean;
   record: VectorRecord | null;
 }
 
-function Inspector({ collectionDimensions, focused, record }: InspectorProps) {
+function Inspector({ collectionDimensions, contentWidth, focused, record }: InspectorProps) {
   if (record === null) {
     return (
       <PanelFrame focused={focused} height={13} title="Inspector">
@@ -745,7 +757,9 @@ function Inspector({ collectionDimensions, focused, record }: InspectorProps) {
     );
   }
 
-  const metadataLines = formatInspectorMetadataLines(record.metadata);
+  const metadataLines = formatInspectorMetadataLines(record.metadata, {
+    valueWidth: inspectorMetadataValueWidth(contentWidth),
+  });
   const vectorPreview = formatInspectorVectorPreview(record.vector);
 
   return (

@@ -1,8 +1,10 @@
 import type { VectorRecord } from "../adapters/types";
-import { formatMetadataValue, formatVectorPreview, pad, truncate } from "../format";
+import { clamp, formatMetadataValue, formatVectorPreview, pad, truncate } from "../format";
 
 const defaultMetadataKeyWidth = 14;
 const defaultMetadataValueWidth = 44;
+const maxMetadataValueWidth = 96;
+const nonValueWidth = 44;
 
 interface InspectorMetadataLineOptions {
   keyWidth?: number;
@@ -64,6 +66,14 @@ export function formatInspectorMetadataLine(
   const valueWidth = options.valueWidth ?? defaultMetadataValueWidth;
 
   return `  ${pad(key, keyWidth)} ${truncate(formatMetadataValue(value), valueWidth)}`;
+}
+
+export function inspectorMetadataValueWidth(contentWidth?: number): number {
+  if (contentWidth === undefined) {
+    return defaultMetadataValueWidth;
+  }
+
+  return clamp(contentWidth - nonValueWidth, defaultMetadataValueWidth, maxMetadataValueWidth);
 }
 
 export function formatInspectorVectorPreview(vector: number[] | null, maxLength = 40): string {

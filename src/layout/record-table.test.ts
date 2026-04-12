@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { formatRecordTableRow, metadataLabel, metadataSummary, recordTableVisibleRowCount, visibleRecordWindow } from "./record-table";
+import {
+  formatRecordTableHeader,
+  formatRecordTableRow,
+  recordTableLabelWidth,
+  metadataLabel,
+  metadataSummary,
+  recordTableVisibleRowCount,
+  visibleRecordWindow,
+} from "./record-table";
 
 describe("record table layout", () => {
   test("formats rows with a label and payload field count", () => {
@@ -18,6 +26,24 @@ describe("record table layout", () => {
         true,
       ),
     ).toBe("> 49           Chris Dyer                   4 fields");
+  });
+
+  test("widens the label column when the records panel has room", () => {
+    const record = {
+      id: "49",
+      metadata: {
+        file_name: "662a3ac7847574fa510569_Chris_Dyer_V6_p.jpeg",
+        url: "/styles/chris-dyer",
+      },
+      vector: null,
+    };
+
+    expect(recordTableLabelWidth(56)).toBe(28);
+    expect(recordTableLabelWidth(120)).toBe(80);
+    expect(formatRecordTableHeader(120)).toBe(`${"ID".padEnd(14)} ${"Label".padEnd(80)} Payload`);
+    expect(formatRecordTableRow(record, true, 120)).toBe(
+      `> 49           ${"662a3ac7847574fa510569_Chris_Dyer_V6_p.jpeg".padEnd(80)} 2 fields`,
+    );
   });
 
   test("finds useful metadata labels from preferred keys and regex patterns", () => {

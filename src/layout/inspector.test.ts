@@ -5,6 +5,7 @@ import {
   formatInspectorMetadataLine,
   formatInspectorPayloadSummary,
   formatInspectorVectorPreview,
+  inspectorMetadataValueWidth,
   inspectorRecordForSelection,
 } from "./inspector";
 
@@ -62,5 +63,17 @@ describe("inspector layout", () => {
       '  url            "/styles/chris-dyer"',
       "  +2 more fields",
     ]);
+  });
+
+  test("widens metadata values when the inspector has room", () => {
+    expect(inspectorMetadataValueWidth(72)).toBe(44);
+    expect(inspectorMetadataValueWidth(140)).toBe(96);
+    expect(
+      formatInspectorMetadataLine(
+        "url",
+        "https://example.com/very/long/path/that/can/use/the/available/terminal/width",
+        { valueWidth: inspectorMetadataValueWidth(140) },
+      ),
+    ).toBe('  url            "https://example.com/very/long/path/that/can/use/the/available/terminal/width"');
   });
 });
