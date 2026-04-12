@@ -1,12 +1,19 @@
-import { useKeyboard, useRenderer } from "@opentui/react";
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
 import { useMemo, useReducer, useRef } from "react";
 import type { ReactNode } from "react";
 import { createAdapter as createDefaultAdapter } from "./adapters/registry";
 import type { Collection, VectorDBAdapter, VectorPage, VectorRecord } from "./adapters/types";
-import { loadCollectionRecords, loadInitialBrowserData, loadRecordDetails, type BrowserData } from "./app-data/browser-data";
+import {
+  loadCollectionRecords,
+  loadInitialBrowserData,
+  loadNextCollectionRecords,
+  loadRecordDetails,
+  type BrowserData,
+} from "./app-data/browser-data";
 import { ConnectionSelect } from "./components/ConnectionSelect";
-import { clamp, formatMetadataValue, formatVectorPreview, metadataPreview, pad, truncate } from "./format";
+import { clamp, formatMetadataValue, formatVectorPreview, pad, truncate } from "./format";
 import { defaultCollectionPanelWidth, formatCollectionPanelRow, resizeCollectionPanelWidth } from "./layout/collection-panel";
+import { formatRecordTableRow, recordTableVisibleRowCount, visibleRecordWindow } from "./layout/record-table";
 import type { ConnectionProfile, ConnectionState, Panel, Screen } from "./types";
 
 const panelOrder: Panel[] = ["collections", "records", "inspector"];
@@ -51,6 +58,9 @@ type AppAction =
   | { type: "SELECT_COLLECTION_REQUEST"; index: number; collectionName: string }
   | { type: "SELECT_COLLECTION_SUCCESS"; index: number; collectionName: string; page: VectorPage }
   | { type: "MOVE_RECORD"; delta: number; recordCount: number }
+  | { type: "LOAD_NEXT_RECORDS_REQUEST"; collectionName: string }
+  | { type: "LOAD_NEXT_RECORDS_SUCCESS"; page: VectorPage }
+  | { type: "LOAD_NEXT_RECORDS_END" }
   | { type: "INSPECT_RECORD_REQUEST"; recordId: string }
   | { type: "INSPECT_RECORD_SUCCESS"; record: VectorRecord }
   | { type: "LOAD_FAILURE"; error: string }
@@ -64,7 +74,7 @@ interface AppProps {
   pageSize?: number;
 }
 
-function createInitialState(connectionCount: number): AppState {
+export function createInitialState(connectionCount: number): AppState {
   return {
     screen: "connections",
     selectedConnectionIndex: 0,
@@ -82,7 +92,7 @@ function createInitialState(connectionCount: number): AppState {
   };
 }
 
-function appReducer(state: AppState, action: AppAction): AppState {
+export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "MOVE_CONNECTION": {
       if (action.connectionCount === 0) {
@@ -207,6 +217,42 @@ function appReducer(state: AppState, action: AppAction): AppState {
         selectedRecordIndex: clamp(state.selectedRecordIndex + action.delta, 0, action.recordCount - 1),
         inspectedRecord: null,
         status: "Selected record updated. Press Enter to inspect.",
+      };
+
+    case "LOAD_NEXT_RECORDS_REQUEST":
+      return {
+        ...state,
+        loading: true,
+        error: null,
+        status: `Loading more records from ${action.collectionName}...`,
+      };
+
+    case "LOAD_NEXT_RECORDS_SUCCESS": {
+      const records = [...state.records, ...action.page.records];
+      const selectedRecordIndex = action.page.records.length === 0 ? state.selectedRecordIndex : state.records.length;
+
+      return {
+        ...state,
+        focusedPanel: "records",
+        selectedRecordIndex,
+        records,
+        recordCursor: action.page.nextCursor,
+        inspectedRecord: null,
+        loading: false,
+        error: null,
+        status:
+          action.page.records.length === 0 || action.page.nextCursor === undefined
+            ? `Loaded ${action.page.records.length} more records. End of collection.`
+            : `Loaded ${action.page.records.length} more records.`,
+      };
+    }
+
+    case "LOAD_NEXT_RECORDS_END":
+      return {
+        ...state,
+        recordCursor: undefined,
+        loading: false,
+        status: "End of collection.",
       };
 
     case "INSPECT_RECORD_REQUEST":
@@ -354,6 +400,31 @@ export function App({
     selectCollectionByIndex(state.selectedCollectionIndex);
   }
 
+  function loadNextRecordPage() {
+    const adapter = adapterRef.current;
+
+    if (adapter === null || selectedCollection === null) {
+      dispatch({ type: "REFRESH_EMPTY" });
+      return;
+    }
+
+    if (state.recordCursor === undefined) {
+      dispatch({ type: "LOAD_NEXT_RECORDS_END" });
+      return;
+    }
+
+    const cursor = state.recordCursor;
+    dispatch({ type: "LOAD_NEXT_RECORDS_REQUEST", collectionName: selectedCollection.name });
+    void (async () => {
+      try {
+        const page = await loadNextCollectionRecords(adapter, selectedCollection.name, cursor, { pageSize });
+        dispatch({ type: "LOAD_NEXT_RECORDS_SUCCESS", page });
+      } catch (error) {
+        dispatch({ type: "LOAD_FAILURE", error: toErrorMessage(error) });
+      }
+    })();
+  }
+
   useKeyboard((key) => {
     if (key.eventType === "release") {
       return;
@@ -414,6 +485,11 @@ export function App({
 
     if (key.name === "]" || key.sequence === "]") {
       dispatch({ type: "RESIZE_COLLECTION_PANEL", delta: 1 });
+      return;
+    }
+
+    if (key.name === "n" || key.name === "pagedown" || key.sequence === "\x1B[6~") {
+      loadNextRecordPage();
       return;
     }
 
@@ -598,18 +674,21 @@ interface RecordTableProps {
 
 function RecordTable({ collectionDimensions, focused, records, selectedIndex }: RecordTableProps) {
   const header = useMemo(() => `${pad("ID", 14)} ${pad("Dims", 5)} Metadata`, []);
+  const { height } = useTerminalDimensions();
+  const visibleRecords = visibleRecordWindow(records, selectedIndex, recordTableVisibleRowCount(height));
 
   return (
     <PanelFrame focused={focused} flexGrow={1} title="Records">
       <text fg={colors.accent}>{header}</text>
       <box flexDirection="column" flexGrow={1}>
         {records.length === 0 ? <text fg={colors.muted}>No records loaded.</text> : null}
-        {records.map((record, index) => {
+        {visibleRecords.records.map((record, visibleIndex) => {
+          const index = visibleRecords.startIndex + visibleIndex;
           const selected = index === selectedIndex;
-          const line = `${selected ? "> " : "  "}${pad(record.id, 12)} ${pad(`${collectionDimensions}`, 5)} ${metadataPreview(record.metadata, 22)}`;
+          const line = formatRecordTableRow(record, collectionDimensions, selected);
 
           return (
-            <text key={record.id} fg={selected ? colors.text : colors.muted} bg={selected ? colors.selectedBg : undefined}>
+            <text key={`${record.id}-${index}`} fg={selected ? colors.text : colors.muted} bg={selected ? colors.selectedBg : undefined}>
               {line}
             </text>
           );
@@ -659,7 +738,7 @@ function HelpOverlay({ screen }: HelpOverlayProps) {
   const help =
     screen === "connections"
       ? "Connections: j/k move | Enter connect | ? help | q quit"
-      : "Main: Tab focus | j/k move | Enter inspect | [/] width | r refresh | c conn | ? help | q quit";
+      : "Main: Tab | j/k | n next | Enter inspect | [/] width | r refresh | c conn | ? | q";
 
   return (
     <box border borderColor={colors.accent} paddingX={1} height={3} alignItems="center">

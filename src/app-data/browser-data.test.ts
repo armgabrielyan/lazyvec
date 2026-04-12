@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { loadCollectionRecords, loadInitialBrowserData, loadRecordDetails } from "./browser-data";
+import { loadCollectionRecords, loadInitialBrowserData, loadNextCollectionRecords, loadRecordDetails } from "./browser-data";
 import type { AdapterCapabilities, HealthStatus, ListOptions, VectorDBAdapter } from "../adapters/types";
 
 const capabilities: AdapterCapabilities = {
@@ -135,6 +135,18 @@ describe("browser data loading", () => {
 
     expect(adapter.listRecordsOptions).toEqual({
       limit: 10,
+      includeVectors: false,
+    });
+  });
+
+  test("loads the next collection record page with the cursor and without vectors", async () => {
+    const adapter = new FakeAdapter();
+
+    await loadNextCollectionRecords(adapter, "rag_chunks", "next", { pageSize: 10 });
+
+    expect(adapter.listRecordsOptions).toEqual({
+      limit: 10,
+      cursor: "next",
       includeVectors: false,
     });
   });

@@ -48,6 +48,19 @@ export async function loadCollectionRecords(
   });
 }
 
+export async function loadNextCollectionRecords(
+  adapter: VectorDBAdapter,
+  collectionName: string,
+  cursor: string,
+  options: BrowserDataOptions,
+): Promise<VectorPage> {
+  return adapter.listRecords(collectionName, {
+    limit: options.pageSize,
+    cursor,
+    includeVectors: false,
+  });
+}
+
 export function loadRecordDetails(
   adapter: VectorDBAdapter,
   collectionName: string,
