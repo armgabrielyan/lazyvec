@@ -17,6 +17,7 @@
   "dependencies": {
     "@opentui/core": "^0.1.97",
     "@opentui/react": "^0.1.97",
+    "@qdrant/js-client-rest": "^1.17.0",
     "react": "^19.2.4",
     "smol-toml": "^1.6.1"
   },

@@ -14,11 +14,6 @@ interface RawLazyvecConfig {
   connections?: unknown;
 }
 
-interface RawConnectionConfig {
-  provider?: unknown;
-  url?: unknown;
-}
-
 const supportedProviders = new Set<Provider>(["qdrant"]);
 
 export function buildConnectionState({
