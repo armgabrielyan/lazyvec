@@ -24,13 +24,14 @@ interface StatusBarTextState {
 
 interface HeaderTextState {
   collectionName: string | null;
-  endpoint: string | null;
+  connectionName: string | null;
 }
 
 interface HeaderParts {
-  appName: string;
+  collectionLabel: string;
   collectionName: string | null;
-  endpoint: string | null;
+  connectionLabel: string;
+  connectionName: string | null;
 }
 
 interface StatusBarVisibilityState {
@@ -58,11 +59,12 @@ export function recordTableEmptyMessage({ loading, recordCount }: RecordTableEmp
   return loading ? "Loading records..." : "No records in this collection.";
 }
 
-export function headerParts({ collectionName, endpoint }: HeaderTextState): HeaderParts {
+export function headerParts({ collectionName, connectionName }: HeaderTextState): HeaderParts {
   return {
-    appName: "lazyvec",
-    endpoint: endpoint === null ? null : `  ${endpoint}  `,
+    collectionLabel: "collection",
     collectionName,
+    connectionLabel: "conn",
+    connectionName,
   };
 }
 

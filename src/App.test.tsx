@@ -117,9 +117,10 @@ function createFakeAdapter(): VectorDBAdapter {
 }
 
 async function flushAsyncRender(renderOnce: () => Promise<void>) {
-  await renderOnce();
-  await Promise.resolve();
-  await renderOnce();
+  for (let index = 0; index < 5; index += 1) {
+    await Promise.resolve();
+    await renderOnce();
+  }
 }
 
 describe("app reducer record pagination", () => {
@@ -236,9 +237,10 @@ describe("App OpenTUI render", () => {
     });
 
     const frame = testSetup.captureCharFrame();
-    expect(frame).toContain("lazyvec");
     expect(frame).toContain("local-qdrant");
+    expect(frame).not.toContain("│ lazyvec");
     expect(frame).not.toContain("choose connection");
+    expect(frame).not.toContain("Pick a connection");
     expect(frame).not.toContain("Select a connection to start.");
 
     act(() => {
@@ -265,7 +267,9 @@ describe("App OpenTUI render", () => {
     });
 
     const frame = testSetup.captureCharFrame();
-    expect(frame).toContain("lazyvec");
+    expect(frame).toContain("conn");
+    expect(frame).toContain("local-qdrant");
+    expect(frame).toContain("collection");
     expect(frame).toContain("rag_chunks");
     expect(frame).toContain("Records");
     expect(frame).toContain("Chris Dyer");

@@ -61,7 +61,6 @@ function ConnectionList({
 }) {
   return (
     <box flexDirection="column" gap={1}>
-      <text fg={colors.muted}>Pick a connection from ~/.lazyvec/config.toml or CLI flags.</text>
       {connections.map((connection, index) => {
         const selected = index === selectedIndex;
         const marker = selected ? "> " : "  ";

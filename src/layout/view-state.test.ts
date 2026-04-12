@@ -13,23 +13,25 @@ describe("view state copy", () => {
     expect(
       headerParts({
         collectionName: "rag_chunks",
-        endpoint: "qdrant://localhost:6333",
+        connectionName: "local-qdrant",
       }),
     ).toEqual({
-      appName: "lazyvec",
-      endpoint: "  qdrant://localhost:6333  ",
+      collectionLabel: "collection",
       collectionName: "rag_chunks",
+      connectionLabel: "conn",
+      connectionName: "local-qdrant",
     });
 
     expect(
       headerParts({
         collectionName: null,
-        endpoint: null,
+        connectionName: null,
       }),
     ).toEqual({
-      appName: "lazyvec",
-      endpoint: null,
+      collectionLabel: "collection",
       collectionName: null,
+      connectionLabel: "conn",
+      connectionName: null,
     });
   });
 

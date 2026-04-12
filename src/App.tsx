@@ -41,7 +41,7 @@ const colors = {
   focus: "#a7f3d0",
   headerBg: "#12312f",
   headerBorder: "#28d7a4",
-  headerLogo: "#f8fafc",
+  headerLabel: "#7dd3fc",
   headerMuted: "#9fb8ad",
   loading: "#facc15",
   muted: "#8b95a7",
@@ -552,7 +552,7 @@ export function App({
 
   return (
     <box flexDirection="column" width="100%" height="100%">
-      <Header connection={selectedConnection} collection={selectedCollection} screen={state.screen} />
+      {state.screen === "main" ? <Header connection={selectedConnection} collection={selectedCollection} /> : null}
 
       {state.screen === "connections" ? (
         <ConnectionSelect
@@ -591,16 +591,12 @@ export function App({
 interface HeaderProps {
   connection: ConnectionProfile | null;
   collection: Collection | null;
-  screen: Screen;
 }
 
-function Header({ connection, collection, screen }: HeaderProps) {
-  const location = screen === "connections" ? null : collection?.name ?? "no collection";
-  const endpoint =
-    connection === null || screen === "connections" ? null : `${connection.provider}://${connection.url.replace(/^https?:\/\//, "")}`;
+function Header({ connection, collection }: HeaderProps) {
   const header = headerParts({
-    collectionName: location,
-    endpoint,
+    collectionName: collection?.name ?? "no collection",
+    connectionName: connection?.name ?? "no connection",
   });
 
   return (
@@ -613,9 +609,11 @@ function Header({ connection, collection, screen }: HeaderProps) {
       paddingX={1}
       alignItems="center"
     >
-      <text fg={colors.headerLogo} bg={colors.headerBg}>{header.appName}</text>
-      {header.endpoint === null ? null : <text fg={colors.headerMuted} bg={colors.headerBg}>{header.endpoint}</text>}
-      {header.collectionName === null ? null : <text fg={colors.focus} bg={colors.headerBg}>{header.collectionName}</text>}
+      <text fg={colors.headerLabel} bg={colors.headerBg}>{`${header.connectionLabel} `}</text>
+      <text fg={colors.title} bg={colors.headerBg}>{header.connectionName}</text>
+      <text fg={colors.headerMuted} bg={colors.headerBg}>  </text>
+      <text fg={colors.headerLabel} bg={colors.headerBg}>{`${header.collectionLabel} `}</text>
+      <text fg={colors.focus} bg={colors.headerBg}>{header.collectionName}</text>
     </box>
   );
 }
