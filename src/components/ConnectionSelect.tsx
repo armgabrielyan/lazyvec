@@ -47,7 +47,7 @@ function NoConnections({ configPath }: { configPath: string }) {
       <text fg={colors.muted}>[connections.local-qdrant]</text>
       <text fg={colors.muted}>provider = "qdrant"</text>
       <text fg={colors.muted}>url = "http://localhost:6333"</text>
-      <text fg={colors.muted}>q quits  |  ? help</text>
+
     </box>
   );
 }
@@ -72,7 +72,7 @@ function ConnectionList({
           </text>
         );
       })}
-      <text fg={colors.muted}>Enter connects  |  j/k moves  |  q quits</text>
+
     </box>
   );
 }

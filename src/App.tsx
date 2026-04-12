@@ -463,6 +463,11 @@ export function App({
       return;
     }
 
+    if (key.name === "escape" && state.showHelp) {
+      dispatch({ type: "TOGGLE_HELP" });
+      return;
+    }
+
     if (state.loading) {
       return;
     }
@@ -568,10 +573,15 @@ export function App({
           records={state.records}
           selectedCollectionIndex={state.selectedCollectionIndex}
           selectedRecordIndex={state.selectedRecordIndex}
+          statusBarVisible={shouldShowStatusBar({ error: state.error, loading: state.loading, status: state.status })}
         />
       )}
 
-      {state.showHelp ? <HelpOverlay screen={state.screen} /> : null}
+      {state.showHelp ? (
+        <box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center">
+          <HelpOverlay screen={state.screen} />
+        </box>
+      ) : null}
       {shouldShowStatusBar({ error: state.error, loading: state.loading, status: state.status }) ? (
         <StatusBar
           error={state.error}
@@ -579,6 +589,7 @@ export function App({
           status={state.status}
         />
       ) : null}
+      <KeyHints />
     </box>
   );
 }
@@ -632,6 +643,7 @@ interface MainViewProps {
   records: VectorRecord[];
   selectedCollectionIndex: number;
   selectedRecordIndex: number;
+  statusBarVisible: boolean;
 }
 
 function MainView({
@@ -644,16 +656,19 @@ function MainView({
   records,
   selectedCollectionIndex,
   selectedRecordIndex,
+  statusBarVisible,
 }: MainViewProps) {
   const { width, height } = useTerminalDimensions();
   const recordContentWidth = Math.max(40, width - collectionPanelWidth - 4);
   const headerHeight = 3;
-  const availableHeight = Math.max(10, height - headerHeight);
+  const footerHeight = 1;
+  const statusBarHeight = statusBarVisible ? 3 : 0;
+  const availableHeight = Math.max(10, height - headerHeight - footerHeight - statusBarHeight);
   const inspectorHeight = Math.max(5, Math.floor(availableHeight * 0.35));
   const recordsHeight = availableHeight - inspectorHeight;
 
   return (
-    <box flexGrow={1} flexDirection="row">
+    <box height={availableHeight} flexDirection="row">
       <CollectionPanel
         collections={collections}
         focused={focusedPanel === "collections"}
@@ -813,19 +828,102 @@ function Inspector({ collectionDimensions, focused, height, record }: InspectorP
   );
 }
 
+interface HelpEntry {
+  action: string;
+  key: string;
+}
+
+interface HelpSection {
+  title: string;
+  entries: HelpEntry[];
+}
+
+const connectionHelpSections: HelpSection[] = [
+  {
+    title: "Navigation",
+    entries: [
+      { action: "Move selection", key: "j / k" },
+      { action: "Connect", key: "Enter" },
+    ],
+  },
+  {
+    title: "General",
+    entries: [
+      { action: "Toggle help", key: "?" },
+      { action: "Quit", key: "q / Ctrl+C" },
+    ],
+  },
+];
+
+const mainHelpSections: HelpSection[] = [
+  {
+    title: "Navigation",
+    entries: [
+      { action: "Cycle panel focus", key: "Tab" },
+      { action: "Cycle panel back", key: "Shift+Tab" },
+      { action: "Move selection", key: "j / k" },
+      { action: "Inspect record", key: "Enter" },
+    ],
+  },
+  {
+    title: "Data",
+    entries: [
+      { action: "Next record page", key: "n / PageDown" },
+      { action: "Refresh collection", key: "r" },
+      { action: "Back to connections", key: "c" },
+    ],
+  },
+  {
+    title: "Layout",
+    entries: [
+      { action: "Resize collection panel", key: "[ / ]" },
+    ],
+  },
+  {
+    title: "General",
+    entries: [
+      { action: "Toggle help", key: "?" },
+      { action: "Quit", key: "q / Ctrl+C" },
+    ],
+  },
+];
+
+const helpActionWidth = 28;
+
+function formatHelpLine(entry: HelpEntry): string {
+  return `${entry.action.padEnd(helpActionWidth)}${entry.key}`;
+}
+
 interface HelpOverlayProps {
   screen: Screen;
 }
 
 function HelpOverlay({ screen }: HelpOverlayProps) {
-  const help =
-    screen === "connections"
-      ? "Connections: j/k move | Enter connect | ? help | q quit"
-      : "Main: Tab | j/k | n next | Enter inspect | [/] width | r refresh | c conn | ? | q";
+  const sections = screen === "connections" ? connectionHelpSections : mainHelpSections;
 
   return (
-    <box border borderColor={colors.accent} paddingX={1} height={3} alignItems="center">
-      <text fg={colors.text}>{help}</text>
+    <box
+      border
+      borderColor={colors.accent}
+      backgroundColor={colors.statusBg}
+      title="Keys"
+      width={50}
+      paddingX={2}
+      paddingY={1}
+      flexDirection="column"
+      gap={1}
+    >
+      {sections.map((section) => (
+        <box key={section.title} flexDirection="column">
+          <text fg={colors.accent}>{section.title}</text>
+          {section.entries.map((entry) => (
+            <text key={entry.action} fg={colors.text}>
+              {"  "}{formatHelpLine(entry)}
+            </text>
+          ))}
+        </box>
+      ))}
+      <text fg={colors.muted}>{"? or Esc to close"}</text>
     </box>
   );
 }
@@ -853,6 +951,14 @@ function StatusBar({ error, loading, status }: StatusBarProps) {
       <text fg={toneColor} bg={colors.statusBg}>
         {formatStatusBarText({ status })}
       </text>
+    </box>
+  );
+}
+
+function KeyHints() {
+  return (
+    <box height={1} flexDirection="row" paddingX={1}>
+      <text fg={colors.muted}>{"? help"}</text>
     </box>
   );
 }
