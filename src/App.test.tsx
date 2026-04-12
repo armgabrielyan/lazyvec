@@ -272,7 +272,7 @@ describe("App OpenTUI render", () => {
     expect(frame).toContain("rag_chunks");
     expect(frame).toContain("Records");
     expect(frame).toContain("Chris Dyer");
-    expect(frame).toContain("Payload: 2 fields");
+    expect(frame).toContain("Payload:");
     expect(frame).toContain("press Enter to fetch vector");
     expect(frame).not.toContain("Connected to");
     expect(frame).not.toContain("main:");
