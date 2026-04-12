@@ -1,5 +1,17 @@
 import type { VectorRecord } from "../adapters/types";
-import { formatMetadataValue, formatVectorPreview, truncate } from "../format";
+import { formatMetadataValue, formatVectorPreview, pad, truncate } from "../format";
+
+const defaultMetadataKeyWidth = 14;
+const defaultMetadataValueWidth = 44;
+
+interface InspectorMetadataLineOptions {
+  keyWidth?: number;
+  valueWidth?: number;
+}
+
+interface InspectorMetadataLinesOptions extends InspectorMetadataLineOptions {
+  maxLines?: number;
+}
 
 export function inspectorRecordForSelection(
   inspectedRecord: VectorRecord | null,
@@ -8,8 +20,50 @@ export function inspectorRecordForSelection(
   return inspectedRecord ?? selectedRecord;
 }
 
-export function formatInspectorMetadataLine(key: string, value: unknown, maxLength = 32): string {
-  return `  ${key}: ${truncate(formatMetadataValue(value), maxLength)}`;
+export function formatInspectorPayloadSummary(metadata: Record<string, unknown>): string {
+  const fieldCount = Object.keys(metadata).length;
+
+  if (fieldCount === 0) {
+    return "Payload: empty";
+  }
+
+  return `Payload: ${fieldCount} ${fieldCount === 1 ? "field" : "fields"}`;
+}
+
+export function formatInspectorMetadataLines(
+  metadata: Record<string, unknown>,
+  options: InspectorMetadataLinesOptions = {},
+): string[] {
+  const maxLines = options.maxLines ?? 5;
+
+  if (maxLines <= 0) {
+    return [];
+  }
+
+  const entries = Object.entries(metadata);
+
+  if (entries.length <= maxLines) {
+    return entries.map(([key, value]) => formatInspectorMetadataLine(key, value, options));
+  }
+
+  const visibleFieldCount = Math.max(0, maxLines - 1);
+  const hiddenFieldCount = entries.length - visibleFieldCount;
+  const visibleLines = entries
+    .slice(0, visibleFieldCount)
+    .map(([key, value]) => formatInspectorMetadataLine(key, value, options));
+
+  return [...visibleLines, `  +${hiddenFieldCount} more ${hiddenFieldCount === 1 ? "field" : "fields"}`];
+}
+
+export function formatInspectorMetadataLine(
+  key: string,
+  value: unknown,
+  options: InspectorMetadataLineOptions = {},
+): string {
+  const keyWidth = options.keyWidth ?? defaultMetadataKeyWidth;
+  const valueWidth = options.valueWidth ?? defaultMetadataValueWidth;
+
+  return `  ${pad(key, keyWidth)} ${truncate(formatMetadataValue(value), valueWidth)}`;
 }
 
 export function formatInspectorVectorPreview(vector: number[] | null, maxLength = 40): string {

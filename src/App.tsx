@@ -13,7 +13,12 @@ import {
 import { ConnectionSelect } from "./components/ConnectionSelect";
 import { clamp, pad } from "./format";
 import { defaultCollectionPanelWidth, formatCollectionPanelRow, resizeCollectionPanelWidth } from "./layout/collection-panel";
-import { formatInspectorMetadataLine, formatInspectorVectorPreview, inspectorRecordForSelection } from "./layout/inspector";
+import {
+  formatInspectorMetadataLines,
+  formatInspectorPayloadSummary,
+  formatInspectorVectorPreview,
+  inspectorRecordForSelection,
+} from "./layout/inspector";
 import { formatRecordTableRow, recordTableVisibleRowCount, visibleRecordWindow } from "./layout/record-table";
 import type { ConnectionProfile, ConnectionState, Panel, Screen } from "./types";
 
@@ -713,18 +718,18 @@ function Inspector({ collectionDimensions, focused, record }: InspectorProps) {
     );
   }
 
-  const metadataEntries = Object.entries(record.metadata);
+  const metadataLines = formatInspectorMetadataLines(record.metadata);
   const vectorPreview = formatInspectorVectorPreview(record.vector);
 
   return (
     <PanelFrame focused={focused} height={13} title="Inspector">
       <text fg={colors.text}>ID: {record.id}</text>
       <text fg={colors.text}>Dims: {collectionDimensions}</text>
-      <text fg={colors.text}>Metadata:</text>
-      {metadataEntries.slice(0, 5).map(([key, value]) => (
-        <text key={key} fg={colors.muted}>{formatInspectorMetadataLine(key, value)}</text>
+      <text fg={colors.text}>{formatInspectorPayloadSummary(record.metadata)}</text>
+      {metadataLines.map((line, index) => (
+        <text key={`${index}-${line}`} fg={colors.muted}>{line}</text>
       ))}
-      <text fg={colors.text}>Vector preview:</text>
+      <text fg={colors.text}>Vector:</text>
       <text fg={colors.muted}>{`  ${vectorPreview}`}</text>
     </PanelFrame>
   );
