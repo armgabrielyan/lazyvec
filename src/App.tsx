@@ -552,7 +552,7 @@ export function App({
 
   return (
     <box flexDirection="column" width="100%" height="100%">
-      {state.screen === "main" ? <Header connection={selectedConnection} collection={selectedCollection} /> : null}
+      {state.screen === "main" ? <Header connection={selectedConnection} /> : null}
 
       {state.screen === "connections" ? (
         <ConnectionSelect
@@ -590,12 +590,10 @@ export function App({
 
 interface HeaderProps {
   connection: ConnectionProfile | null;
-  collection: Collection | null;
 }
 
-function Header({ connection, collection }: HeaderProps) {
+function Header({ connection }: HeaderProps) {
   const header = headerParts({
-    collectionName: collection?.name ?? "no collection",
     connectionName: connection?.name ?? "no connection",
   });
 
@@ -609,12 +607,23 @@ function Header({ connection, collection }: HeaderProps) {
       paddingX={1}
       alignItems="center"
     >
-      <text fg={colors.headerLabel} bg={colors.headerBg}>{`${header.connectionLabel} `}</text>
-      <text fg={colors.title} bg={colors.headerBg}>{header.connectionName}</text>
-      <text fg={colors.headerMuted} bg={colors.headerBg}>  </text>
-      <text fg={colors.headerLabel} bg={colors.headerBg}>{`${header.collectionLabel} `}</text>
-      <text fg={colors.focus} bg={colors.headerBg}>{header.collectionName}</text>
+      <HeaderField label={header.connectionLabel} value={header.connectionName} valueColor={colors.title} />
     </box>
+  );
+}
+
+interface HeaderFieldProps {
+  label: string;
+  value: string | null;
+  valueColor: string;
+}
+
+function HeaderField({ label, value, valueColor }: HeaderFieldProps) {
+  return (
+    <>
+      <text fg={colors.headerLabel} bg={colors.headerBg}>{`${label} `}</text>
+      <text fg={valueColor} bg={colors.headerBg}>{value}</text>
+    </>
   );
 }
 

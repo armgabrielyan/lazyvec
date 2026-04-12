@@ -12,25 +12,19 @@ describe("view state copy", () => {
   test("formats header segments", () => {
     expect(
       headerParts({
-        collectionName: "rag_chunks",
         connectionName: "local-qdrant",
       }),
     ).toEqual({
-      collectionLabel: "collection",
-      collectionName: "rag_chunks",
-      connectionLabel: "conn",
+      connectionLabel: "conn:",
       connectionName: "local-qdrant",
     });
 
     expect(
       headerParts({
-        collectionName: null,
         connectionName: null,
       }),
     ).toEqual({
-      collectionLabel: "collection",
-      collectionName: null,
-      connectionLabel: "conn",
+      connectionLabel: "conn:",
       connectionName: null,
     });
   });

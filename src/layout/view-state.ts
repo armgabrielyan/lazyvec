@@ -23,13 +23,10 @@ interface StatusBarTextState {
 }
 
 interface HeaderTextState {
-  collectionName: string | null;
   connectionName: string | null;
 }
 
 interface HeaderParts {
-  collectionLabel: string;
-  collectionName: string | null;
   connectionLabel: string;
   connectionName: string | null;
 }
@@ -59,11 +56,9 @@ export function recordTableEmptyMessage({ loading, recordCount }: RecordTableEmp
   return loading ? "Loading records..." : "No records in this collection.";
 }
 
-export function headerParts({ collectionName, connectionName }: HeaderTextState): HeaderParts {
+export function headerParts({ connectionName }: HeaderTextState): HeaderParts {
   return {
-    collectionLabel: "collection",
-    collectionName,
-    connectionLabel: "conn",
+    connectionLabel: "conn:",
     connectionName,
   };
 }

@@ -269,7 +269,6 @@ describe("App OpenTUI render", () => {
     const frame = testSetup.captureCharFrame();
     expect(frame).toContain("conn");
     expect(frame).toContain("local-qdrant");
-    expect(frame).toContain("collection");
     expect(frame).toContain("rag_chunks");
     expect(frame).toContain("Records");
     expect(frame).toContain("Chris Dyer");
