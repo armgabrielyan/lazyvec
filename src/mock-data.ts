@@ -1,23 +1,4 @@
-import type { CollectionDataset, ConnectionProfile } from "./types";
-
-export const mockConnections: ConnectionProfile[] = [
-  {
-    id: "local-qdrant",
-    name: "local-qdrant",
-    provider: "qdrant",
-    url: "http://localhost:6333",
-    description: "Fallback local Qdrant profile",
-    source: "fallback",
-  },
-  {
-    id: "docker-qdrant",
-    name: "docker-qdrant",
-    provider: "qdrant",
-    url: "http://127.0.0.1:6333",
-    description: "Example self-hosted Qdrant profile",
-    source: "config",
-  },
-];
+import type { CollectionDataset } from "./types";
 
 export const mockCollections: CollectionDataset[] = [
   {

@@ -12,6 +12,21 @@ bun install
 bun run start
 ```
 
+With no config file, lazyvec shows setup guidance instead of assuming Qdrant is running locally.
+Add a connection at `~/.lazyvec/config.toml`:
+
+```toml
+[connections.local-qdrant]
+provider = "qdrant"
+url = "http://localhost:6333"
+```
+
+Or use quick-connect flags:
+
+```bash
+bun run start -- --provider qdrant --url http://localhost:6333
+```
+
 ## Keys
 
 | Key | Action |

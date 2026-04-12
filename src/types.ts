@@ -4,7 +4,7 @@ export type Screen = "connections" | "main";
 
 export type Panel = "collections" | "records" | "inspector";
 
-export type ConnectionSource = "fallback" | "config" | "cli";
+export type ConnectionSource = "config" | "cli";
 
 export interface ConnectionProfile {
   id: string;
@@ -13,6 +13,17 @@ export interface ConnectionProfile {
   url: string;
   description: string;
   source: ConnectionSource;
+}
+
+export interface ConnectionOnboarding {
+  configPath: string;
+  missingConfig: boolean;
+}
+
+export interface ConnectionState {
+  connections: ConnectionProfile[];
+  defaultConnectionId?: string;
+  onboarding: ConnectionOnboarding;
 }
 
 export interface CollectionSummary {

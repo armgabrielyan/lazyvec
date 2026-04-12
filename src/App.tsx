@@ -1,9 +1,10 @@
 import { useKeyboard, useRenderer } from "@opentui/react";
 import { useMemo, useReducer } from "react";
 import type { ReactNode } from "react";
+import { ConnectionSelect } from "./components/ConnectionSelect";
 import { clamp, formatCount, formatMetadataValue, formatVectorPreview, metadataPreview, pad, truncate } from "./format";
-import { mockCollections, mockConnections } from "./mock-data";
-import type { CollectionDataset, ConnectionProfile, Panel, Screen, VectorRecord } from "./types";
+import { mockCollections } from "./mock-data";
+import type { CollectionDataset, ConnectionProfile, ConnectionState, Panel, Screen, VectorRecord } from "./types";
 
 const panelOrder: Panel[] = ["collections", "records", "inspector"];
 
@@ -31,8 +32,8 @@ interface AppState {
 }
 
 type AppAction =
-  | { type: "MOVE_CONNECTION"; delta: number }
-  | { type: "CONNECT_SELECTED" }
+  | { type: "MOVE_CONNECTION"; delta: number; connectionCount: number }
+  | { type: "CONNECT_SELECTED"; connectionName: string | null }
   | { type: "BACK_TO_CONNECTIONS" }
   | { type: "CYCLE_FOCUS"; delta: number }
   | { type: "MOVE_IN_FOCUSED_PANEL"; delta: number; collectionCount: number; recordCount: number }
@@ -40,35 +41,49 @@ type AppAction =
   | { type: "REFRESH" }
   | { type: "TOGGLE_HELP" };
 
-const initialState: AppState = {
-  screen: "connections",
-  selectedConnectionIndex: 0,
-  selectedCollectionIndex: 0,
-  selectedRecordIndex: 0,
-  focusedPanel: "collections",
-  showHelp: false,
-  status: "Select a connection to start.",
-};
+function createInitialState(connectionCount: number): AppState {
+  return {
+    screen: "connections",
+    selectedConnectionIndex: 0,
+    selectedCollectionIndex: 0,
+    selectedRecordIndex: 0,
+    focusedPanel: "collections",
+    showHelp: false,
+    status: connectionCount === 0 ? "Add a connection before connecting." : "Select a connection to start.",
+  };
+}
 
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "MOVE_CONNECTION": {
+      if (action.connectionCount === 0) {
+        return {
+          ...state,
+          selectedConnectionIndex: 0,
+          status: "Add a connection before connecting.",
+        };
+      }
+
       const selectedConnectionIndex = clamp(
         state.selectedConnectionIndex + action.delta,
         0,
-        mockConnections.length - 1,
+        action.connectionCount - 1,
       );
-      const connection = mockConnections[selectedConnectionIndex] ?? mockConnections[0]!;
 
       return {
         ...state,
         selectedConnectionIndex,
-        status: `Ready to open ${connection.name}.`,
+        status: "Connection selected.",
       };
     }
 
     case "CONNECT_SELECTED": {
-      const connection = mockConnections[state.selectedConnectionIndex] ?? mockConnections[0]!;
+      if (action.connectionName === null) {
+        return {
+          ...state,
+          status: "Add a connection before connecting.",
+        };
+      }
 
       return {
         ...state,
@@ -76,7 +91,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         focusedPanel: "collections",
         selectedCollectionIndex: 0,
         selectedRecordIndex: 0,
-        status: `Connected to ${connection.name}.`,
+        status: `Connected to ${action.connectionName}.`,
       };
     }
 
@@ -167,11 +182,16 @@ function appReducer(state: AppState, action: AppAction): AppState {
   }
 }
 
-export function App() {
-  const renderer = useRenderer();
-  const [state, dispatch] = useReducer(appReducer, initialState);
+interface AppProps {
+  connectionState: ConnectionState;
+}
 
-  const selectedConnection = mockConnections[state.selectedConnectionIndex] ?? mockConnections[0]!;
+export function App({ connectionState }: AppProps) {
+  const renderer = useRenderer();
+  const connections = connectionState.connections;
+  const [state, dispatch] = useReducer(appReducer, connections.length, createInitialState);
+
+  const selectedConnection = connections[state.selectedConnectionIndex] ?? null;
   const selectedCollection = mockCollections[state.selectedCollectionIndex] ?? mockCollections[0]!;
   const records = selectedCollection.records;
   const selectedRecord = records[state.selectedRecordIndex] ?? null;
@@ -193,17 +213,17 @@ export function App() {
 
     if (state.screen === "connections") {
       if (key.name === "down" || key.name === "j") {
-        dispatch({ type: "MOVE_CONNECTION", delta: 1 });
+        dispatch({ type: "MOVE_CONNECTION", delta: 1, connectionCount: connections.length });
         return;
       }
 
       if (key.name === "up" || key.name === "k") {
-        dispatch({ type: "MOVE_CONNECTION", delta: -1 });
+        dispatch({ type: "MOVE_CONNECTION", delta: -1, connectionCount: connections.length });
         return;
       }
 
       if (key.name === "enter" || key.name === "return") {
-        dispatch({ type: "CONNECT_SELECTED" });
+        dispatch({ type: "CONNECT_SELECTED", connectionName: selectedConnection?.name ?? null });
       }
 
       return;
@@ -254,7 +274,11 @@ export function App() {
       <Header connection={selectedConnection} collection={selectedCollection} screen={state.screen} />
 
       {state.screen === "connections" ? (
-        <ConnectionSelect connections={mockConnections} selectedIndex={state.selectedConnectionIndex} />
+        <ConnectionSelect
+          configPath={connectionState.onboarding.configPath}
+          connections={connections}
+          selectedIndex={state.selectedConnectionIndex}
+        />
       ) : (
         <MainView
           collections={mockCollections}
@@ -273,45 +297,18 @@ export function App() {
 }
 
 interface HeaderProps {
-  connection: ConnectionProfile;
+  connection: ConnectionProfile | null;
   collection: CollectionDataset;
   screen: Screen;
 }
 
 function Header({ connection, collection, screen }: HeaderProps) {
   const location = screen === "connections" ? "choose connection" : collection.name;
-  const endpoint = `${connection.provider}://${connection.url.replace(/^https?:\/\//, "")}`;
+  const endpoint = connection === null ? "no connection" : `${connection.provider}://${connection.url.replace(/^https?:\/\//, "")}`;
 
   return (
     <box border borderColor={colors.border} height={3} paddingX={1} alignItems="center">
       <text fg={colors.title}>{`lazyvec  ${endpoint}  ${location}`}</text>
-    </box>
-  );
-}
-
-interface ConnectionSelectProps {
-  connections: ConnectionProfile[];
-  selectedIndex: number;
-}
-
-function ConnectionSelect({ connections, selectedIndex }: ConnectionSelectProps) {
-  return (
-    <box flexGrow={1} alignItems="center" justifyContent="center">
-      <box border borderColor={colors.border} title="Connections" width="76%" maxWidth={92} minWidth={54} paddingX={2} paddingY={1} flexDirection="column" gap={1}>
-        <text fg={colors.muted}>Pick a connection. The real config loader will read ~/.lazyvec/config.toml next.</text>
-        {connections.map((connection, index) => {
-          const selected = index === selectedIndex;
-          const marker = selected ? "> " : "  ";
-          const line = truncate(`${marker}${pad(connection.name, 18)} ${pad(connection.provider, 6)} ${connection.url}`, 56);
-
-          return (
-            <text key={connection.id} fg={selected ? colors.text : colors.muted} bg={selected ? colors.selectedBg : undefined}>
-              {line}
-            </text>
-          );
-        })}
-        <text fg={colors.muted}>Enter connects  |  j/k moves  |  q quits</text>
-      </box>
     </box>
   );
 }
