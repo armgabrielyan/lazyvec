@@ -35,6 +35,7 @@ bun run start -- --provider qdrant --url http://localhost:6333
 | `j` / `k` or arrows | Move selection |
 | `Enter` | Connect or inspect/select |
 | `Tab` / `Shift+Tab` | Cycle main-view panel focus |
+| `[` / `]` | Resize the collection panel |
 | `c` | Return to the connection picker |
 | `r` | Refresh the current collection |
 | `?` | Toggle help |

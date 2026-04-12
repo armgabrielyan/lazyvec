@@ -5,7 +5,8 @@ import { createAdapter as createDefaultAdapter } from "./adapters/registry";
 import type { Collection, VectorDBAdapter, VectorPage, VectorRecord } from "./adapters/types";
 import { loadCollectionRecords, loadInitialBrowserData, loadRecordDetails, type BrowserData } from "./app-data/browser-data";
 import { ConnectionSelect } from "./components/ConnectionSelect";
-import { clamp, formatCount, formatMetadataValue, formatVectorPreview, metadataPreview, pad, truncate } from "./format";
+import { clamp, formatMetadataValue, formatVectorPreview, metadataPreview, pad, truncate } from "./format";
+import { defaultCollectionPanelWidth, formatCollectionPanelRow, resizeCollectionPanelWidth } from "./layout/collection-panel";
 import type { ConnectionProfile, ConnectionState, Panel, Screen } from "./types";
 
 const panelOrder: Panel[] = ["collections", "records", "inspector"];
@@ -36,6 +37,7 @@ interface AppState {
   collections: Collection[];
   records: VectorRecord[];
   inspectedRecord: VectorRecord | null;
+  collectionPanelWidth: number;
   recordCursor?: string;
 }
 
@@ -53,6 +55,7 @@ type AppAction =
   | { type: "INSPECT_RECORD_SUCCESS"; record: VectorRecord }
   | { type: "LOAD_FAILURE"; error: string }
   | { type: "REFRESH_EMPTY" }
+  | { type: "RESIZE_COLLECTION_PANEL"; delta: number }
   | { type: "TOGGLE_HELP" };
 
 interface AppProps {
@@ -75,6 +78,7 @@ function createInitialState(connectionCount: number): AppState {
     collections: [],
     records: [],
     inspectedRecord: null,
+    collectionPanelWidth: defaultCollectionPanelWidth,
   };
 }
 
@@ -237,6 +241,16 @@ function appReducer(state: AppState, action: AppAction): AppState {
         status: "No collection selected.",
       };
 
+    case "RESIZE_COLLECTION_PANEL": {
+      const collectionPanelWidth = resizeCollectionPanelWidth(state.collectionPanelWidth, action.delta);
+
+      return {
+        ...state,
+        collectionPanelWidth,
+        status: `Collection panel width: ${collectionPanelWidth}.`,
+      };
+    }
+
     case "TOGGLE_HELP":
       return {
         ...state,
@@ -393,6 +407,16 @@ export function App({
       return;
     }
 
+    if (key.name === "[" || key.sequence === "[") {
+      dispatch({ type: "RESIZE_COLLECTION_PANEL", delta: -1 });
+      return;
+    }
+
+    if (key.name === "]" || key.sequence === "]") {
+      dispatch({ type: "RESIZE_COLLECTION_PANEL", delta: 1 });
+      return;
+    }
+
     if (key.name === "enter" || key.name === "return") {
       if (state.focusedPanel === "collections") {
         dispatch({ type: "CYCLE_FOCUS", delta: 1 });
@@ -437,6 +461,7 @@ export function App({
       ) : (
         <MainView
           collectionDimensions={selectedCollection?.dimensions ?? 0}
+          collectionPanelWidth={state.collectionPanelWidth}
           collections={state.collections}
           focusedPanel={state.focusedPanel}
           inspectedRecord={state.inspectedRecord}
@@ -471,6 +496,7 @@ function Header({ connection, collection, screen }: HeaderProps) {
 
 interface MainViewProps {
   collectionDimensions: number;
+  collectionPanelWidth: number;
   collections: Collection[];
   focusedPanel: Panel;
   inspectedRecord: VectorRecord | null;
@@ -481,6 +507,7 @@ interface MainViewProps {
 
 function MainView({
   collectionDimensions,
+  collectionPanelWidth,
   collections,
   focusedPanel,
   inspectedRecord,
@@ -493,6 +520,7 @@ function MainView({
       <CollectionPanel
         collections={collections}
         focused={focusedPanel === "collections"}
+        width={collectionPanelWidth}
         selectedIndex={selectedCollectionIndex}
       />
       <box flexGrow={1} flexDirection="column">
@@ -538,16 +566,17 @@ interface CollectionPanelProps {
   collections: Collection[];
   focused: boolean;
   selectedIndex: number;
+  width: number;
 }
 
-function CollectionPanel({ collections, focused, selectedIndex }: CollectionPanelProps) {
+function CollectionPanel({ collections, focused, selectedIndex, width }: CollectionPanelProps) {
   return (
-    <PanelFrame focused={focused} title="Collections" width={30}>
+    <PanelFrame focused={focused} title="Collections" width={width}>
       <box flexDirection="column" flexGrow={1}>
         {collections.length === 0 ? <text fg={colors.muted}>No collections.</text> : null}
         {collections.map((collection, index) => {
           const selected = index === selectedIndex;
-          const line = `${selected ? "> " : "  "}${pad(collection.name, 12)} ${pad(formatCount(collection.count), 5)} ${collection.dimensions}d`;
+          const line = formatCollectionPanelRow(collection, selected, width);
 
           return (
             <text key={collection.name} fg={selected ? colors.text : colors.muted} bg={selected ? colors.selectedBg : undefined}>
@@ -630,7 +659,7 @@ function HelpOverlay({ screen }: HelpOverlayProps) {
   const help =
     screen === "connections"
       ? "Connections: j/k move | Enter connect | ? help | q quit"
-      : "Main: Tab focus | j/k move | Enter inspect | r refresh | c connections | ? help | q quit";
+      : "Main: Tab focus | j/k move | Enter inspect | [/] width | r refresh | c conn | ? help | q quit";
 
   return (
     <box border borderColor={colors.accent} paddingX={1} height={3} alignItems="center">
