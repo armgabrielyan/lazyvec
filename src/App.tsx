@@ -160,10 +160,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         records: action.data.records,
         inspectedRecord: null,
         recordCursor: action.data.recordCursor,
-        status:
-          action.data.collections.length === 0
-            ? `Connected to ${action.connectionName}. No collections found.`
-            : `Connected to ${action.connectionName}. Loaded ${action.data.collections.length} collections.`,
+        status: "",
       };
 
     case "CONNECT_FAILURE":
@@ -195,7 +192,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         focusedPanel,
-        status: `Focused ${focusedPanel}.`,
+        status: "",
       };
     }
 
@@ -208,7 +205,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         inspectedRecord: null,
         loading: true,
         error: null,
-        status: `Loading records from ${action.collectionName}...`,
+        status: "",
       };
 
     case "SELECT_COLLECTION_SUCCESS":
@@ -221,10 +218,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         inspectedRecord: null,
         loading: false,
         error: null,
-        status:
-          action.page.records.length === 0
-            ? `No records found in ${action.collectionName}.`
-            : `Loaded ${action.page.records.length} records from ${action.collectionName}.`,
+        status: "",
       };
 
     case "MOVE_RECORD":
@@ -241,7 +235,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         selectedRecordIndex: clamp(state.selectedRecordIndex + action.delta, 0, action.recordCount - 1),
         inspectedRecord: null,
-        status: "Selected record updated. Press Enter to fetch vector.",
+        status: "",
       };
 
     case "LOAD_NEXT_RECORDS_REQUEST":
@@ -249,7 +243,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         loading: true,
         error: null,
-        status: `Loading more records from ${action.collectionName}...`,
+        status: "",
       };
 
     case "LOAD_NEXT_RECORDS_SUCCESS": {
@@ -265,10 +259,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         inspectedRecord: null,
         loading: false,
         error: null,
-        status:
-          action.page.records.length === 0 || action.page.nextCursor === undefined
-            ? `Loaded ${action.page.records.length} more records. End of collection.`
-            : `Loaded ${action.page.records.length} more records.`,
+        status: action.page.records.length === 0 || action.page.nextCursor === undefined ? "End of collection." : "",
       };
     }
 
@@ -285,7 +276,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         loading: true,
         error: null,
-        status: `Fetching vector for ${action.recordId}...`,
+        status: "",
       };
 
     case "INSPECT_RECORD_SUCCESS":
@@ -295,7 +286,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         inspectedRecord: action.record,
         loading: false,
         error: null,
-        status: `Inspecting ${action.record.id}.`,
+        status: "",
       };
 
     case "LOAD_FAILURE":
@@ -575,12 +566,10 @@ export function App({
       )}
 
       {state.showHelp ? <HelpOverlay screen={state.screen} /> : null}
-      {shouldShowStatusBar({ error: state.error, loading: state.loading, screen: state.screen }) ? (
+      {shouldShowStatusBar({ error: state.error, loading: state.loading, status: state.status }) ? (
         <StatusBar
           error={state.error}
-          focusedPanel={state.focusedPanel}
           loading={state.loading}
-          screen={state.screen}
           status={state.status}
         />
       ) : null}
@@ -832,13 +821,11 @@ function HelpOverlay({ screen }: HelpOverlayProps) {
 
 interface StatusBarProps {
   error: string | null;
-  focusedPanel: Panel;
   loading: boolean;
-  screen: Screen;
   status: string;
 }
 
-function StatusBar({ error, focusedPanel, loading, screen, status }: StatusBarProps) {
+function StatusBar({ error, loading, status }: StatusBarProps) {
   const tone = statusTone({ error, loading });
   const toneColor = tone === "error" ? colors.error : tone === "loading" ? colors.loading : colors.focus;
 
@@ -852,9 +839,8 @@ function StatusBar({ error, focusedPanel, loading, screen, status }: StatusBarPr
       paddingX={1}
       alignItems="center"
     >
-      <text fg={toneColor} bg={colors.statusBg}>| </text>
       <text fg={toneColor} bg={colors.statusBg}>
-        {formatStatusBarText({ error, focusedPanel, loading, screen, status })}
+        {formatStatusBarText({ status })}
       </text>
     </box>
   );

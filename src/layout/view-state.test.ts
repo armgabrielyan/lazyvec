@@ -29,26 +29,18 @@ describe("view state copy", () => {
     });
   });
 
-  test("formats status state with error taking precedence over loading", () => {
+  test("formats footer text as message only", () => {
     expect(
       formatStatusBarText({
-        error: null,
-        focusedPanel: "records",
-        loading: true,
-        screen: "main",
-        status: "Loading records from rag_chunks...",
+        status: "End of collection.",
       }),
-    ).toBe("main:records  loading  Loading records from rag_chunks...");
+    ).toBe("End of collection.");
 
     expect(
       formatStatusBarText({
-        error: "Bad Request",
-        focusedPanel: "records",
-        loading: false,
-        screen: "main",
         status: "Bad Request",
       }),
-    ).toBe("main:records  error  Bad Request");
+    ).toBe("Bad Request");
   });
 
   test("derives visual status tone", () => {
@@ -58,10 +50,11 @@ describe("view state copy", () => {
   });
 
   test("hides idle connection-screen status chrome", () => {
-    expect(shouldShowStatusBar({ error: null, loading: false, screen: "connections" })).toBe(false);
-    expect(shouldShowStatusBar({ error: null, loading: true, screen: "connections" })).toBe(true);
-    expect(shouldShowStatusBar({ error: "Bad Request", loading: false, screen: "connections" })).toBe(true);
-    expect(shouldShowStatusBar({ error: null, loading: false, screen: "main" })).toBe(true);
+    expect(shouldShowStatusBar({ error: null, loading: false, status: "" })).toBe(false);
+    expect(shouldShowStatusBar({ error: null, loading: true, status: "" })).toBe(false);
+    expect(shouldShowStatusBar({ error: null, loading: true, status: "Connecting..." })).toBe(true);
+    expect(shouldShowStatusBar({ error: "Bad Request", loading: false, status: "" })).toBe(true);
+    expect(shouldShowStatusBar({ error: null, loading: false, status: "End of collection." })).toBe(true);
   });
 
   test("uses explicit empty and loading copy for panels", () => {

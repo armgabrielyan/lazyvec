@@ -176,7 +176,7 @@ describe("app reducer record pagination", () => {
 });
 
 describe("app reducer view copy", () => {
-  test("uses explicit empty-record copy after selecting an empty collection", () => {
+  test("leaves successful empty-record selection quiet because the records panel shows emptiness", () => {
     const connected = appReducer(createInitialState(1), {
       type: "CONNECT_SUCCESS",
       connectionName: "local-qdrant",
@@ -192,10 +192,10 @@ describe("app reducer view copy", () => {
       },
     });
 
-    expect(next.status).toBe("No records found in rag_chunks.");
+    expect(next.status).toBe("");
   });
 
-  test("describes Enter as fetching vector details after record movement", () => {
+  test("keeps record movement quiet because the inspector updates with the selection", () => {
     const connected = appReducer(createInitialState(1), {
       type: "CONNECT_SUCCESS",
       connectionName: "local-qdrant",
@@ -217,8 +217,8 @@ describe("app reducer view copy", () => {
       recordId: "2",
     });
 
-    expect(moved.status).toBe("Selected record updated. Press Enter to fetch vector.");
-    expect(loadingDetails.status).toBe("Fetching vector for 2...");
+    expect(moved.status).toBe("");
+    expect(loadingDetails.status).toBe("");
   });
 });
 
@@ -274,6 +274,9 @@ describe("App OpenTUI render", () => {
     expect(frame).toContain("Chris Dyer");
     expect(frame).toContain("Payload: 2 fields");
     expect(frame).toContain("press Enter to fetch vector");
+    expect(frame).not.toContain("Connected to");
+    expect(frame).not.toContain("main:");
+    expect(frame).not.toContain("ready");
 
     act(() => {
       testSetup.renderer.destroy();

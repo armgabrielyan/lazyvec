@@ -1,5 +1,3 @@
-import type { Panel, Screen } from "../types";
-
 export type StatusTone = "ready" | "loading" | "error";
 
 interface EmptyPanelState {
@@ -15,10 +13,6 @@ interface RecordTableEmptyState extends EmptyPanelState {
 }
 
 interface StatusBarTextState {
-  error: string | null;
-  focusedPanel: Panel;
-  loading: boolean;
-  screen: Screen;
   status: string;
 }
 
@@ -34,7 +28,7 @@ interface HeaderParts {
 interface StatusBarVisibilityState {
   error: string | null;
   loading: boolean;
-  screen: Screen;
+  status: string;
 }
 
 export function collectionPanelEmptyMessage({
@@ -63,21 +57,13 @@ export function headerParts({ connectionName }: HeaderTextState): HeaderParts {
   };
 }
 
-export function shouldShowStatusBar({ error, loading, screen }: StatusBarVisibilityState): boolean {
-  return screen === "main" || loading || error !== null;
+export function shouldShowStatusBar({ error, loading, status }: StatusBarVisibilityState): boolean {
+  const hasMessage = status.trim().length > 0;
+  return error !== null || hasMessage;
 }
 
-export function formatStatusBarText({
-  error,
-  focusedPanel,
-  loading,
-  screen,
-  status,
-}: StatusBarTextState): string {
-  const mode = screen === "connections" ? "connections" : `main:${focusedPanel}`;
-  const state = statusTone({ error, loading });
-
-  return `${mode}  ${state}  ${status}`;
+export function formatStatusBarText({ status }: StatusBarTextState): string {
+  return status;
 }
 
 export function statusTone({ error, loading }: { error: string | null; loading: boolean }): StatusTone {
