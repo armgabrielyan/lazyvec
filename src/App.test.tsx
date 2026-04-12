@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { testRender } from "@opentui/react/test-utils";
+import { act } from "react";
+import type { VectorDBAdapter } from "./adapters/types";
 import { appReducer, createInitialState } from "./App";
+import { App } from "./App";
 import type { BrowserData } from "./app-data/browser-data";
+import type { ConnectionProfile, ConnectionState } from "./types";
 
 const initialData: BrowserData = {
   health: {
@@ -26,6 +31,96 @@ const initialData: BrowserData = {
   ],
   recordCursor: "cursor-2",
 };
+
+const localConnection: ConnectionProfile = {
+  id: "local-qdrant",
+  name: "local-qdrant",
+  provider: "qdrant",
+  url: "http://localhost:6333",
+  description: "Local Qdrant",
+  source: "config",
+};
+
+const connectionState: ConnectionState = {
+  connections: [localConnection],
+  defaultConnectionId: "local-qdrant",
+  onboarding: {
+    configPath: "~/.lazyvec/config.toml",
+    missingConfig: false,
+  },
+};
+
+const adapterCapabilities = {
+  listCollections: true,
+  describeCollection: true,
+  listRecords: true,
+  getRecord: true,
+  includeVectorsInList: false,
+  metadataFilter: false,
+  namespaces: false,
+  searchByVector: false,
+  searchByText: false,
+  deleteRecords: false,
+};
+
+function createFakeAdapter(): VectorDBAdapter {
+  return {
+    provider: "qdrant",
+    capabilities: adapterCapabilities,
+    async connect() {},
+    async disconnect() {},
+    async healthCheck() {
+      return initialData.health;
+    },
+    async listCollections() {
+      return initialData.collections;
+    },
+    async describeCollection(name) {
+      const collection = initialData.collections.find((item) => item.name === name);
+
+      if (collection === undefined) {
+        throw new Error(`Unknown collection ${name}`);
+      }
+
+      return {
+        ...collection,
+        status: "ready",
+        config: {},
+      };
+    },
+    async listRecords() {
+      return {
+        records: [
+          {
+            id: "1",
+            metadata: {
+              name: "Chris Dyer",
+              url: "/styles/chris-dyer",
+            },
+            vector: null,
+          },
+        ],
+        nextCursor: "cursor-2",
+      };
+    },
+    async getRecord() {
+      return {
+        id: "1",
+        metadata: {
+          name: "Chris Dyer",
+          url: "/styles/chris-dyer",
+        },
+        vector: [0.1, 0.2],
+      };
+    },
+  };
+}
+
+async function flushAsyncRender(renderOnce: () => Promise<void>) {
+  await renderOnce();
+  await Promise.resolve();
+  await renderOnce();
+}
 
 describe("app reducer record pagination", () => {
   test("appends next record page and selects the first appended record", () => {
@@ -123,5 +218,38 @@ describe("app reducer view copy", () => {
 
     expect(moved.status).toBe("Selected record updated. Press Enter to fetch vector.");
     expect(loadingDetails.status).toBe("Fetching vector for 2...");
+  });
+});
+
+describe("App OpenTUI render", () => {
+  test("renders the main browser view after selecting a connection", async () => {
+    const testSetup = await testRender(
+      <App
+        connectionState={connectionState}
+        createAdapter={async () => createFakeAdapter()}
+      />,
+      { width: 120, height: 36 },
+    );
+
+    await act(async () => {
+      await testSetup.renderOnce();
+    });
+
+    await act(async () => {
+      testSetup.mockInput.pressEnter();
+      await flushAsyncRender(testSetup.renderOnce);
+    });
+
+    const frame = testSetup.captureCharFrame();
+    expect(frame).toContain("lazyvec");
+    expect(frame).toContain("rag_chunks");
+    expect(frame).toContain("Records");
+    expect(frame).toContain("Chris Dyer");
+    expect(frame).toContain("Payload: 2 fields");
+    expect(frame).toContain("press Enter to fetch vector");
+
+    act(() => {
+      testSetup.renderer.destroy();
+    });
   });
 });
