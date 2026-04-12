@@ -1,0 +1,27 @@
+{
+  "name": "lazyvec",
+  "version": "0.1.0",
+  "module": "src/index.tsx",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "lazyvec": "./src/index.tsx"
+  },
+  "scripts": {
+    "dev": "bun run --watch src/index.tsx",
+    "start": "bun run src/index.tsx",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "build": "bun build src/index.tsx --outdir=dist --target=bun"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.1.97",
+    "@opentui/react": "^0.1.97",
+    "react": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.2.14",
+    "typescript": "^5"
+  }
+}
