@@ -35,11 +35,21 @@ export interface VectorRecord {
   vector: number[] | null;
 }
 
+export interface SearchResult {
+  record: VectorRecord;
+  score: number;
+}
+
 export interface ListOptions {
   limit: number;
   cursor?: string;
   filter?: FilterCondition[];
   includeVectors?: boolean;
+}
+
+export interface SearchOptions {
+  vector: number[];
+  limit: number;
 }
 
 export interface VectorPage {
@@ -64,4 +74,5 @@ export interface VectorDBAdapter {
   describeCollection(name: string): Promise<CollectionDetails>;
   listRecords(collection: string, opts: ListOptions): Promise<VectorPage>;
   getRecord(collection: string, id: string): Promise<VectorRecord>;
+  searchByVector(collection: string, opts: SearchOptions): Promise<SearchResult[]>;
 }

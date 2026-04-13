@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { loadCollectionRecords, loadInitialBrowserData, loadNextCollectionRecords, loadRecordDetails } from "./browser-data";
+import { loadCollectionRecords, loadInitialBrowserData, loadNextCollectionRecords, loadRecordDetails, searchSimilarRecords } from "./browser-data";
 import type { AdapterCapabilities, HealthStatus, ListOptions, VectorDBAdapter } from "../adapters/types";
 
 const capabilities: AdapterCapabilities = {
@@ -79,6 +79,14 @@ class FakeAdapter implements VectorDBAdapter {
       vector: [0.1, 0.2, 0.3],
     };
   }
+
+  async searchByVector(_collection: string, opts: { vector: number[]; limit: number }) {
+    this.calls.push("searchByVector");
+    return [
+      { record: { id: "similar-1", metadata: { source: "wiki" }, vector: null }, score: 0.95 },
+      { record: { id: "similar-2", metadata: { source: "blog" }, vector: null }, score: 0.82 },
+    ].slice(0, opts.limit);
+  }
 }
 
 describe("browser data loading", () => {
@@ -149,6 +157,18 @@ describe("browser data loading", () => {
       cursor: "next",
       includeVectors: false,
     });
+  });
+
+  test("searches for similar records by vector", async () => {
+    const adapter = new FakeAdapter();
+
+    const results = await searchSimilarRecords(adapter, "rag_chunks", [0.1, 0.2, 0.3], 10);
+
+    expect(results).toEqual([
+      { record: { id: "similar-1", metadata: { source: "wiki" }, vector: null }, score: 0.95 },
+      { record: { id: "similar-2", metadata: { source: "blog" }, vector: null }, score: 0.82 },
+    ]);
+    expect(adapter.calls).toContain("searchByVector");
   });
 
   test("loads record details for the inspector", async () => {

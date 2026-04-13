@@ -1,4 +1,4 @@
-import type { Collection, HealthStatus, VectorDBAdapter, VectorPage, VectorRecord } from "../adapters/types";
+import type { Collection, HealthStatus, SearchResult, VectorDBAdapter, VectorPage, VectorRecord } from "../adapters/types";
 import type { FilterCondition } from "../filter/parse";
 
 export interface BrowserDataOptions {
@@ -64,6 +64,15 @@ export async function loadNextCollectionRecords(
     filter: filter && filter.length > 0 ? filter : undefined,
     includeVectors: false,
   });
+}
+
+export function searchSimilarRecords(
+  adapter: VectorDBAdapter,
+  collectionName: string,
+  vector: number[],
+  limit: number,
+): Promise<SearchResult[]> {
+  return adapter.searchByVector(collectionName, { vector, limit });
 }
 
 export function loadRecordDetails(

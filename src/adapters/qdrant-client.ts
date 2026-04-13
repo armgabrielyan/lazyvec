@@ -42,6 +42,15 @@ export interface QdrantClientLike {
       with_vector: true;
     },
   ): Promise<QdrantPoint[]>;
+  search(
+    collectionName: string,
+    request: {
+      vector: number[];
+      limit: number;
+      with_payload: true;
+      with_vector: boolean;
+    },
+  ): Promise<Array<QdrantPoint & { score: number }>>;
 }
 
 export type QdrantClientFactory = (config: ConnectionProfile) => QdrantClientLike;

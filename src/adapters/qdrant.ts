@@ -4,6 +4,8 @@ import type {
   CollectionDetails,
   HealthStatus,
   ListOptions,
+  SearchOptions,
+  SearchResult,
   VectorDBAdapter,
   VectorMetric,
   VectorPage,
@@ -21,7 +23,7 @@ export const qdrantCapabilities: AdapterCapabilities = {
   includeVectorsInList: false,
   metadataFilter: true,
   namespaces: false,
-  searchByVector: false,
+  searchByVector: true,
   searchByText: false,
   deleteRecords: false,
 };
@@ -134,6 +136,20 @@ export class QdrantAdapter implements VectorDBAdapter {
     }
 
     return normalizePoint(record);
+  }
+
+  async searchByVector(collection: string, opts: SearchOptions): Promise<SearchResult[]> {
+    const response = await this.requireClient().search(collection, {
+      vector: opts.vector,
+      limit: opts.limit,
+      with_payload: true,
+      with_vector: false,
+    });
+
+    return response.map((point) => ({
+      record: normalizePoint(point),
+      score: point.score,
+    }));
   }
 
   private requireClient(): QdrantClientLike {

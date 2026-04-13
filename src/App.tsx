@@ -3,16 +3,17 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import type { ReactNode } from "react";
 import { createAdapter as createDefaultAdapter } from "./adapters/registry";
-import type { Collection, VectorDBAdapter, VectorPage, VectorRecord } from "./adapters/types";
+import type { Collection, SearchResult, VectorDBAdapter, VectorPage, VectorRecord } from "./adapters/types";
 import {
   loadCollectionRecords,
   loadInitialBrowserData,
   loadNextCollectionRecords,
   loadRecordDetails,
+  searchSimilarRecords,
   type BrowserData,
 } from "./app-data/browser-data";
 import { ConnectionSelect } from "./components/ConnectionSelect";
-import { clamp } from "./format";
+import { clamp, pad } from "./format";
 import { defaultCollectionPanelWidth, formatCollectionPanelRow, resizeCollectionPanelWidth } from "./layout/collection-panel";
 import {
   formatInspectorVectorPreview,
@@ -71,6 +72,8 @@ interface AppState {
   collectionPanelWidth: number;
   connectionStatuses: Record<string, ConnectionStatus>;
   tableSchema: TableSchema;
+  searchResults: SearchResult[] | null;
+  searchSourceId: string | null;
   filterOpen: boolean;
   filterInput: string;
   filterCursor: number;
@@ -103,7 +106,10 @@ type AppAction =
   | { type: "UPDATE_FILTER_INPUT"; value: string; cursor: number }
   | { type: "APPLY_FILTER"; conditions: FilterCondition[] }
   | { type: "APPLY_FILTER_SUCCESS"; page: VectorPage }
-  | { type: "CLEAR_FILTER" };
+  | { type: "CLEAR_FILTER" }
+  | { type: "SEARCH_SIMILAR_REQUEST"; sourceId: string }
+  | { type: "SEARCH_SIMILAR_SUCCESS"; results: SearchResult[]; sourceId: string }
+  | { type: "CLEAR_SEARCH" };
 
 interface AppProps {
   connectionState: ConnectionState;
@@ -128,6 +134,8 @@ export function createInitialState(connectionCount: number): AppState {
     collectionPanelWidth: defaultCollectionPanelWidth,
     connectionStatuses: {},
     tableSchema: { columns: [] },
+    searchResults: null,
+    searchSourceId: null,
     filterOpen: false,
     filterInput: "",
     filterCursor: 0,
@@ -180,6 +188,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         collections: action.data.collections,
         records: action.data.records,
         tableSchema: inferTableSchema(action.data.records),
+        searchResults: null,
+        searchSourceId: null,
         inspectedRecord: null,
         recordCursor: action.data.recordCursor,
         status: "",
@@ -201,6 +211,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         collections: [],
         records: [],
         tableSchema: { columns: [] },
+        searchResults: null,
+        searchSourceId: null,
         inspectedRecord: null,
         loading: false,
         error: null,
@@ -232,6 +244,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         selectedRecordIndex: 0,
         records: [],
         tableSchema: { columns: [] },
+        searchResults: null,
+        searchSourceId: null,
         inspectedRecord: null,
         loading: true,
         error: null,
@@ -434,6 +448,45 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         error: null,
         status: "",
       };
+
+    case "SEARCH_SIMILAR_REQUEST":
+      return {
+        ...state,
+        loading: true,
+        error: null,
+        searchSourceId: action.sourceId,
+        status: `Searching for records similar to ${action.sourceId}...`,
+      };
+
+    case "SEARCH_SIMILAR_SUCCESS": {
+      const records = action.results.map((r) => r.record);
+      return {
+        ...state,
+        records,
+        tableSchema: inferTableSchema(records),
+        searchResults: action.results,
+        searchSourceId: action.sourceId,
+        selectedRecordIndex: 0,
+        inspectedRecord: null,
+        recordCursor: undefined,
+        loading: false,
+        error: null,
+        status: `Found ${action.results.length} similar records.`,
+      };
+    }
+
+    case "CLEAR_SEARCH":
+      return {
+        ...state,
+        searchResults: null,
+        searchSourceId: null,
+        selectedRecordIndex: 0,
+        records: [],
+        inspectedRecord: null,
+        loading: true,
+        error: null,
+        status: "",
+      };
   }
 }
 
@@ -620,6 +673,59 @@ export function App({
     })();
   }
 
+  const searchLimit = 20;
+
+  function searchSimilar() {
+    const adapter = adapterRef.current;
+
+    if (adapter === null || selectedCollection === null || selectedRecord === null) {
+      return;
+    }
+
+    const recordToSearch = selectedRecord;
+    dispatch({ type: "SEARCH_SIMILAR_REQUEST", sourceId: recordToSearch.id });
+
+    void (async () => {
+      try {
+        let vector = recordToSearch.vector;
+
+        if (vector === null) {
+          const full = await loadRecordDetails(adapter, selectedCollection.name, recordToSearch.id);
+          vector = full.vector;
+        }
+
+        if (vector === null) {
+          dispatch({ type: "LOAD_FAILURE", error: "Record has no vector." });
+          return;
+        }
+
+        const results = await searchSimilarRecords(adapter, selectedCollection.name, vector, searchLimit);
+        dispatch({ type: "SEARCH_SIMILAR_SUCCESS", results, sourceId: recordToSearch.id });
+      } catch (error) {
+        dispatch({ type: "LOAD_FAILURE", error: toErrorMessage(error) });
+      }
+    })();
+  }
+
+  function clearSearch() {
+    const adapter = adapterRef.current;
+
+    if (adapter === null || selectedCollection === null) {
+      dispatch({ type: "CLEAR_SEARCH" });
+      return;
+    }
+
+    dispatch({ type: "CLEAR_SEARCH" });
+    void (async () => {
+      try {
+        const page = await loadCollectionRecords(adapter, selectedCollection.name, { pageSize });
+        dispatch({ type: "SELECT_COLLECTION_SUCCESS", index: state.selectedCollectionIndex, collectionName: selectedCollection.name, page });
+      } catch (error) {
+        dispatch({ type: "LOAD_FAILURE", error: toErrorMessage(error) });
+      }
+    })();
+  }
+
   useKeyboard((key) => {
     if (key.eventType === "release") {
       return;
@@ -640,6 +746,8 @@ export function App({
         dispatch({ type: "TOGGLE_HELP" });
       } else if (state.filterOpen) {
         dispatch({ type: "CLOSE_FILTER" });
+      } else if (state.searchResults !== null && state.screen === "main") {
+        clearSearch();
       } else if (state.activeFilter.length > 0 && state.screen === "main") {
         clearFilter();
       } else if (state.screen === "main") {
@@ -728,6 +836,11 @@ export function App({
       return;
     }
 
+    if (key.name === "s" && (state.focusedPanel === "records" || state.focusedPanel === "inspector")) {
+      searchSimilar();
+      return;
+    }
+
     if (key.name === "enter" || key.name === "return") {
       if (state.focusedPanel === "collections") {
         dispatch({ type: "CYCLE_FOCUS", delta: 1 });
@@ -784,6 +897,8 @@ export function App({
           loading={state.loading}
           records={state.records}
           selectedCollectionIndex={state.selectedCollectionIndex}
+          searchResults={state.searchResults}
+          searchSourceId={state.searchSourceId}
           selectedRecordIndex={state.selectedRecordIndex}
           statusBarVisible={shouldShowStatusBar({ error: state.error, loading: state.loading, status: state.status })}
           tableSchema={state.tableSchema}
@@ -858,6 +973,8 @@ interface MainViewProps {
   inspectedRecord: VectorRecord | null;
   loading: boolean;
   records: VectorRecord[];
+  searchResults: SearchResult[] | null;
+  searchSourceId: string | null;
   selectedCollectionIndex: number;
   selectedRecordIndex: number;
   statusBarVisible: boolean;
@@ -876,6 +993,8 @@ function MainView({
   inspectedRecord,
   loading,
   records,
+  searchResults,
+  searchSourceId,
   selectedCollectionIndex,
   selectedRecordIndex,
   statusBarVisible,
@@ -911,6 +1030,8 @@ function MainView({
             loading={loading}
             records={records}
             schema={tableSchema}
+            searchResults={searchResults}
+            searchSourceId={searchSourceId}
             selectedIndex={selectedRecordIndex}
           />
           <Inspector
@@ -1015,10 +1136,12 @@ interface RecordTableProps {
   loading: boolean;
   records: VectorRecord[];
   schema: TableSchema;
+  searchResults: SearchResult[] | null;
+  searchSourceId: string | null;
   selectedIndex: number;
 }
 
-function RecordTable({ activeFilter, contentWidth, focused, height, loading, records, schema, selectedIndex }: RecordTableProps) {
+function RecordTable({ activeFilter, contentWidth, focused, height, loading, records, schema, searchResults, searchSourceId, selectedIndex }: RecordTableProps) {
   const panelChrome = 4;
   const visibleRows = Math.max(5, height - panelChrome);
   const visibleRecords = visibleRecordWindow(records, selectedIndex, visibleRows);
@@ -1027,23 +1150,43 @@ function RecordTable({ activeFilter, contentWidth, focused, height, loading, rec
     recordCount: records.length,
   });
 
-  const filterSuffix = activeFilter.length > 0 ? " (filtered)" : "";
-  const title = `Records (${records.length})${filterSuffix}`;
-  const header = formatTableHeader(schema, contentWidth);
+  const isSearchMode = searchResults !== null;
+  const scoreMap = useMemo(() => {
+    if (searchResults === null) {
+      return null;
+    }
+    const map = new Map<string, number>();
+    for (const result of searchResults) {
+      map.set(result.record.id, result.score);
+    }
+    return map;
+  }, [searchResults]);
+
+  const scoreColumnWidth = 8;
+  const dataWidth = isSearchMode ? contentWidth - scoreColumnWidth : contentWidth;
+
+  const title = isSearchMode
+    ? `Similar to ${searchSourceId} (${records.length})`
+    : `Records (${records.length})${activeFilter.length > 0 ? " (filtered)" : ""}`;
+  const header = formatTableHeader(schema, dataWidth);
+  const scoreHeader = isSearchMode ? pad("score", scoreColumnWidth) : "";
 
   return (
     <PanelFrame focused={focused} height={height} title={title}>
       <box flexDirection="column" flexGrow={1}>
         {emptyMessage === null ? null : <text fg={colors.muted}>{emptyMessage}</text>}
-        {records.length > 0 ? <text fg={colors.accent}>{header}</text> : null}
+        {records.length > 0 ? <text fg={colors.accent}>{scoreHeader}{header}</text> : null}
         {visibleRecords.records.map((record, visibleIndex) => {
           const index = visibleRecords.startIndex + visibleIndex;
           const selected = index === selectedIndex;
-          const line = formatRecordTableRow(record, selected, schema, contentWidth);
+          const line = formatRecordTableRow(record, selected, schema, dataWidth);
+          const scoreCell = scoreMap !== null
+            ? pad(scoreMap.get(record.id)?.toFixed(4) ?? "-", scoreColumnWidth)
+            : "";
 
           return (
             <text key={`${record.id}-${index}`} fg={selected ? colors.text : colors.muted} bg={selected ? colors.selectedBg : undefined}>
-              {line}
+              {scoreCell}{line}
             </text>
           );
         })}
@@ -1126,6 +1269,7 @@ const mainHelpSections: HelpSection[] = [
     title: "Data",
     entries: [
       { action: "Next record page", key: "n / PageDown" },
+      { action: "Find similar records", key: "s" },
       { action: "Refresh collection", key: "r" },
       { action: "Back to connections", key: "Esc / c" },
     ],

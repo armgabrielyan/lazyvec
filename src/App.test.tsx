@@ -113,6 +113,9 @@ function createFakeAdapter(): VectorDBAdapter {
         vector: [0.1, 0.2],
       };
     },
+    async searchByVector() {
+      return [];
+    },
   };
 }
 

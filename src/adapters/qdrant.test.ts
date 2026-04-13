@@ -50,6 +50,7 @@ function createClient(overrides: Partial<QdrantClientLike> = {}): QdrantClientLi
         vector: [0.0234, -0.0891, 0.1247],
       },
     ],
+    search: async () => [],
     ...overrides,
   };
 }
@@ -64,7 +65,7 @@ describe("QdrantAdapter", () => {
       includeVectorsInList: false,
       metadataFilter: true,
       namespaces: false,
-      searchByVector: false,
+      searchByVector: true,
       searchByText: false,
       deleteRecords: false,
     });
@@ -228,6 +229,36 @@ describe("QdrantAdapter", () => {
       ids: [42],
       with_payload: true,
       with_vector: true,
+    });
+  });
+
+  test("searches by vector and returns scored results", async () => {
+    let searchRequest: unknown = null;
+    const adapter = new QdrantAdapter({
+      client: createClient({
+        search: async (_collection, request) => {
+          searchRequest = request;
+          return [
+            { id: "doc-1", payload: { source: "wiki" }, score: 0.95 },
+            { id: 42, payload: { source: "blog" }, score: 0.82 },
+          ];
+        },
+      }),
+    });
+
+    await adapter.connect(localConnection);
+
+    await expect(
+      adapter.searchByVector("rag_chunks", { vector: [0.1, 0.2, 0.3], limit: 10 }),
+    ).resolves.toEqual([
+      { record: { id: "doc-1", metadata: { source: "wiki" }, vector: null }, score: 0.95 },
+      { record: { id: "42", metadata: { source: "blog" }, vector: null }, score: 0.82 },
+    ]);
+    expect(searchRequest).toEqual({
+      vector: [0.1, 0.2, 0.3],
+      limit: 10,
+      with_payload: true,
+      with_vector: false,
     });
   });
 
