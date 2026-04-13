@@ -11,6 +11,7 @@ import type {
 } from "./types";
 import { createQdrantClient, type QdrantClientFactory, type QdrantClientLike, type QdrantPoint, type QdrantPointId } from "./qdrant-client";
 import type { ConnectionProfile } from "../types";
+import { toQdrantFilter } from "./qdrant-filter";
 
 export const qdrantCapabilities: AdapterCapabilities = {
   listCollections: true,
@@ -18,7 +19,7 @@ export const qdrantCapabilities: AdapterCapabilities = {
   listRecords: true,
   getRecord: true,
   includeVectorsInList: false,
-  metadataFilter: false,
+  metadataFilter: true,
   namespaces: false,
   searchByVector: false,
   searchByText: false,
@@ -103,9 +104,11 @@ export class QdrantAdapter implements VectorDBAdapter {
   }
 
   async listRecords(collection: string, opts: ListOptions): Promise<VectorPage> {
+    const filter = opts.filter ? toQdrantFilter(opts.filter) : undefined;
     const response = await this.requireClient().scroll(collection, {
       limit: opts.limit,
       offset: opts.cursor === undefined ? undefined : toQdrantPointId(opts.cursor),
+      filter: filter as Record<string, unknown> | undefined,
       with_payload: true,
       with_vector: opts.includeVectors ?? false,
     });

@@ -62,7 +62,7 @@ describe("QdrantAdapter", () => {
       listRecords: true,
       getRecord: true,
       includeVectorsInList: false,
-      metadataFilter: false,
+      metadataFilter: true,
       namespaces: false,
       searchByVector: false,
       searchByText: false,

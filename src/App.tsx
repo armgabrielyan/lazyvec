@@ -28,6 +28,8 @@ import {
   statusTone,
 } from "./layout/view-state";
 import { checkConnectionReachable } from "./config/connection-status";
+import type { FilterCondition } from "./filter/parse";
+import { formatFilterSummary, parseFilterInput } from "./filter/parse";
 import type { ConnectionProfile, ConnectionState, ConnectionStatus, Panel, Screen } from "./types";
 
 const panelOrder: Panel[] = ["collections", "records", "inspector"];
@@ -67,6 +69,10 @@ interface AppState {
   inspectedRecord: VectorRecord | null;
   collectionPanelWidth: number;
   connectionStatuses: Record<string, ConnectionStatus>;
+  filterOpen: boolean;
+  filterInput: string;
+  filterCursor: number;
+  activeFilter: FilterCondition[];
   recordCursor?: string;
 }
 
@@ -89,7 +95,13 @@ type AppAction =
   | { type: "REFRESH_EMPTY" }
   | { type: "RESIZE_COLLECTION_PANEL"; delta: number }
   | { type: "TOGGLE_HELP" }
-  | { type: "CONNECTION_STATUS_UPDATE"; connectionId: string; status: ConnectionStatus };
+  | { type: "CONNECTION_STATUS_UPDATE"; connectionId: string; status: ConnectionStatus }
+  | { type: "OPEN_FILTER" }
+  | { type: "CLOSE_FILTER" }
+  | { type: "UPDATE_FILTER_INPUT"; value: string; cursor: number }
+  | { type: "APPLY_FILTER"; conditions: FilterCondition[] }
+  | { type: "APPLY_FILTER_SUCCESS"; page: VectorPage }
+  | { type: "CLEAR_FILTER" };
 
 interface AppProps {
   connectionState: ConnectionState;
@@ -113,6 +125,10 @@ export function createInitialState(connectionCount: number): AppState {
     inspectedRecord: null,
     collectionPanelWidth: defaultCollectionPanelWidth,
     connectionStatuses: {},
+    filterOpen: false,
+    filterInput: "",
+    filterCursor: 0,
+    activeFilter: [],
   };
 }
 
@@ -184,6 +200,10 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         loading: false,
         error: null,
         status: "",
+        filterOpen: false,
+        filterInput: "",
+        filterCursor: 0,
+        activeFilter: [],
       };
 
     case "CYCLE_FOCUS": {
@@ -210,6 +230,10 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         loading: true,
         error: null,
         status: "",
+        filterOpen: false,
+        filterInput: "",
+        filterCursor: 0,
+        activeFilter: [],
       };
 
     case "SELECT_COLLECTION_SUCCESS":
@@ -336,6 +360,69 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           ...state.connectionStatuses,
           [action.connectionId]: action.status,
         },
+      };
+
+    case "OPEN_FILTER": {
+      const prefill = state.activeFilter.length > 0 ? formatFilterSummary(state.activeFilter) : "";
+      return {
+        ...state,
+        filterOpen: true,
+        filterInput: prefill,
+        filterCursor: prefill.length,
+      };
+    }
+
+    case "CLOSE_FILTER":
+      return {
+        ...state,
+        filterOpen: false,
+        filterInput: "",
+        filterCursor: 0,
+      };
+
+    case "UPDATE_FILTER_INPUT":
+      return {
+        ...state,
+        filterInput: action.value,
+        filterCursor: action.cursor,
+      };
+
+    case "APPLY_FILTER":
+      return {
+        ...state,
+        activeFilter: action.conditions,
+        selectedRecordIndex: 0,
+        records: [],
+        inspectedRecord: null,
+        loading: true,
+        error: null,
+        status: "",
+      };
+
+    case "APPLY_FILTER_SUCCESS":
+      return {
+        ...state,
+        records: action.page.records,
+        recordCursor: action.page.nextCursor,
+        selectedRecordIndex: 0,
+        loading: false,
+        error: null,
+        status: action.page.records.length === 0 ? "No records match filter." : "",
+      };
+
+    case "CLEAR_FILTER":
+      return {
+        ...state,
+        filterOpen: false,
+        filterInput: "",
+        filterCursor: 0,
+        activeFilter: [],
+        selectedRecordIndex: 0,
+        records: [],
+        inspectedRecord: null,
+        loading: true,
+        error: null,
+        status: "",
       };
   }
 }
@@ -467,11 +554,56 @@ export function App({
     }
 
     const cursor = state.recordCursor;
+    const filter = state.activeFilter;
     dispatch({ type: "LOAD_NEXT_RECORDS_REQUEST", collectionName: selectedCollection.name });
     void (async () => {
       try {
-        const page = await loadNextCollectionRecords(adapter, selectedCollection.name, cursor, { pageSize });
+        const page = await loadNextCollectionRecords(adapter, selectedCollection.name, cursor, { pageSize }, filter);
         dispatch({ type: "LOAD_NEXT_RECORDS_SUCCESS", page });
+      } catch (error) {
+        dispatch({ type: "LOAD_FAILURE", error: toErrorMessage(error) });
+      }
+    })();
+  }
+
+  function applyFilter() {
+    const adapter = adapterRef.current;
+    const conditions = parseFilterInput(state.filterInput);
+
+    if (adapter === null || selectedCollection === null) {
+      dispatch({ type: "CLOSE_FILTER" });
+      return;
+    }
+
+    if (conditions.length === 0) {
+      clearFilter();
+      return;
+    }
+
+    dispatch({ type: "APPLY_FILTER", conditions });
+    void (async () => {
+      try {
+        const page = await loadCollectionRecords(adapter, selectedCollection.name, { pageSize }, conditions);
+        dispatch({ type: "APPLY_FILTER_SUCCESS", page });
+      } catch (error) {
+        dispatch({ type: "LOAD_FAILURE", error: toErrorMessage(error) });
+      }
+    })();
+  }
+
+  function clearFilter() {
+    const adapter = adapterRef.current;
+
+    if (adapter === null || selectedCollection === null) {
+      dispatch({ type: "CLEAR_FILTER" });
+      return;
+    }
+
+    dispatch({ type: "CLEAR_FILTER" });
+    void (async () => {
+      try {
+        const page = await loadCollectionRecords(adapter, selectedCollection.name, { pageSize });
+        dispatch({ type: "SELECT_COLLECTION_SUCCESS", index: state.selectedCollectionIndex, collectionName: selectedCollection.name, page });
       } catch (error) {
         dispatch({ type: "LOAD_FAILURE", error: toErrorMessage(error) });
       }
@@ -496,9 +628,34 @@ export function App({
     if (key.name === "escape") {
       if (state.showHelp) {
         dispatch({ type: "TOGGLE_HELP" });
+      } else if (state.filterOpen) {
+        dispatch({ type: "CLOSE_FILTER" });
+      } else if (state.activeFilter.length > 0 && state.screen === "main") {
+        clearFilter();
       } else if (state.screen === "main") {
         void disconnectCurrentAdapter();
         dispatch({ type: "BACK_TO_CONNECTIONS" });
+      }
+      return;
+    }
+
+    if (state.filterOpen) {
+      const { filterInput: input, filterCursor: cursor } = state;
+
+      if (key.name === "enter" || key.name === "return") {
+        applyFilter();
+      } else if (key.name === "left") {
+        dispatch({ type: "UPDATE_FILTER_INPUT", value: input, cursor: Math.max(0, cursor - 1) });
+      } else if (key.name === "right") {
+        dispatch({ type: "UPDATE_FILTER_INPUT", value: input, cursor: Math.min(input.length, cursor + 1) });
+      } else if (key.name === "backspace" || key.name === "delete") {
+        if (cursor > 0) {
+          const value = input.slice(0, cursor - 1) + input.slice(cursor);
+          dispatch({ type: "UPDATE_FILTER_INPUT", value, cursor: cursor - 1 });
+        }
+      } else if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
+        const value = input.slice(0, cursor) + key.sequence + input.slice(cursor);
+        dispatch({ type: "UPDATE_FILTER_INPUT", value, cursor: cursor + 1 });
       }
       return;
     }
@@ -556,6 +713,11 @@ export function App({
       return;
     }
 
+    if (key.sequence === "/" && !key.shift) {
+      dispatch({ type: "OPEN_FILTER" });
+      return;
+    }
+
     if (key.name === "enter" || key.name === "return") {
       if (state.focusedPanel === "collections") {
         dispatch({ type: "CYCLE_FOCUS", delta: 1 });
@@ -600,9 +762,13 @@ export function App({
         />
       ) : (
         <MainView
+          activeFilter={state.activeFilter}
           collectionDimensions={selectedCollection?.dimensions ?? 0}
           collectionPanelWidth={state.collectionPanelWidth}
           collections={state.collections}
+          filterCursor={state.filterCursor}
+          filterInput={state.filterInput}
+          filterOpen={state.filterOpen}
           focusedPanel={state.focusedPanel}
           inspectedRecord={inspectorRecord}
           loading={state.loading}
@@ -670,9 +836,13 @@ function HeaderField({ label, value, valueColor }: HeaderFieldProps) {
 }
 
 interface MainViewProps {
+  activeFilter: FilterCondition[];
   collectionDimensions: number;
   collectionPanelWidth: number;
   collections: Collection[];
+  filterCursor: number;
+  filterInput: string;
+  filterOpen: boolean;
   focusedPanel: Panel;
   inspectedRecord: VectorRecord | null;
   loading: boolean;
@@ -683,9 +853,13 @@ interface MainViewProps {
 }
 
 function MainView({
+  activeFilter,
   collectionDimensions,
   collectionPanelWidth,
   collections,
+  filterCursor,
+  filterInput,
+  filterOpen,
   focusedPanel,
   inspectedRecord,
   loading,
@@ -698,35 +872,40 @@ function MainView({
   const recordContentWidth = Math.max(40, width - collectionPanelWidth - 4);
   const headerHeight = 3;
   const footerHeight = 1;
+  const filterBarHeight = filterOpen ? 3 : 0;
   const statusBarHeight = statusBarVisible ? 3 : 0;
-  const availableHeight = Math.max(10, height - headerHeight - footerHeight - statusBarHeight);
+  const availableHeight = Math.max(10, height - headerHeight - footerHeight - filterBarHeight - statusBarHeight);
   const inspectorHeight = Math.max(5, Math.floor(availableHeight * 0.35));
   const recordsHeight = availableHeight - inspectorHeight;
 
   return (
-    <box height={availableHeight} flexDirection="row">
-      <CollectionPanel
-        collections={collections}
-        focused={focusedPanel === "collections"}
-        loading={loading}
-        width={collectionPanelWidth}
-        selectedIndex={selectedCollectionIndex}
-      />
-      <box flexGrow={1} flexDirection="column">
-        <RecordTable
-          contentWidth={recordContentWidth}
-          focused={focusedPanel === "records"}
-          height={recordsHeight}
+    <box height={availableHeight + filterBarHeight} flexDirection="column">
+      {filterOpen ? <FilterBar input={filterInput} cursor={filterCursor} /> : null}
+      <box flexGrow={1} flexDirection="row">
+        <CollectionPanel
+          collections={collections}
+          focused={focusedPanel === "collections"}
           loading={loading}
-          records={records}
-          selectedIndex={selectedRecordIndex}
+          width={collectionPanelWidth}
+          selectedIndex={selectedCollectionIndex}
         />
-        <Inspector
-          collectionDimensions={collectionDimensions}
-          focused={focusedPanel === "inspector"}
-          height={inspectorHeight}
-          record={inspectedRecord}
-        />
+        <box flexGrow={1} flexDirection="column">
+          <RecordTable
+            activeFilter={activeFilter}
+            contentWidth={recordContentWidth}
+            focused={focusedPanel === "records"}
+            height={recordsHeight}
+            loading={loading}
+            records={records}
+            selectedIndex={selectedRecordIndex}
+          />
+          <Inspector
+            collectionDimensions={collectionDimensions}
+            focused={focusedPanel === "inspector"}
+            height={inspectorHeight}
+            record={inspectedRecord}
+          />
+        </box>
       </box>
     </box>
   );
@@ -754,6 +933,29 @@ function PanelFrame({ children, focused, height, title, width, flexGrow }: Panel
       width={width}
     >
       {children}
+    </box>
+  );
+}
+
+function FilterBar({ input, cursor }: { input: string; cursor: number }) {
+  const before = input.slice(0, cursor);
+  const at = input[cursor] ?? " ";
+  const after = input.slice(cursor + 1);
+
+  return (
+    <box
+      border
+      borderColor={colors.accent}
+      backgroundColor={colors.statusBg}
+      flexDirection="row"
+      height={3}
+      paddingX={1}
+      alignItems="center"
+    >
+      <text fg={colors.muted} bg={colors.statusBg}>{"/ "}</text>
+      <text fg={colors.text} bg={colors.statusBg}>{before}</text>
+      <text fg={colors.statusBg} bg={colors.accent}>{at}</text>
+      <text fg={colors.text} bg={colors.statusBg}>{after}</text>
     </box>
   );
 }
@@ -792,6 +994,7 @@ function CollectionPanel({ collections, focused, loading, selectedIndex, width }
 }
 
 interface RecordTableProps {
+  activeFilter: FilterCondition[];
   contentWidth: number;
   focused: boolean;
   height: number;
@@ -800,7 +1003,7 @@ interface RecordTableProps {
   selectedIndex: number;
 }
 
-function RecordTable({ contentWidth, focused, height, loading, records, selectedIndex }: RecordTableProps) {
+function RecordTable({ activeFilter, contentWidth, focused, height, loading, records, selectedIndex }: RecordTableProps) {
   const panelChrome = 4;
   const visibleRows = Math.max(5, height - panelChrome);
   const visibleRecords = visibleRecordWindow(records, selectedIndex, visibleRows);
@@ -809,7 +1012,8 @@ function RecordTable({ contentWidth, focused, height, loading, records, selected
     recordCount: records.length,
   });
 
-  const title = `Records (${records.length}) — ID / Label`;
+  const filterSuffix = activeFilter.length > 0 ? " (filtered)" : "";
+  const title = `Records (${records.length})${filterSuffix} — ID / Label`;
 
   return (
     <PanelFrame focused={focused} height={height} title={title}>
@@ -907,6 +1111,14 @@ const mainHelpSections: HelpSection[] = [
       { action: "Next record page", key: "n / PageDown" },
       { action: "Refresh collection", key: "r" },
       { action: "Back to connections", key: "Esc / c" },
+    ],
+  },
+  {
+    title: "Filter",
+    entries: [
+      { action: "Open filter", key: "/" },
+      { action: "Apply filter", key: "Enter" },
+      { action: "Clear filter / close", key: "Esc" },
     ],
   },
   {

@@ -1,3 +1,4 @@
+import type { FilterCondition } from "../filter/parse";
 import type { ConnectionProfile, Provider } from "../types";
 
 export type VectorMetric = "cosine" | "euclidean" | "dotproduct" | "unknown";
@@ -37,6 +38,7 @@ export interface VectorRecord {
 export interface ListOptions {
   limit: number;
   cursor?: string;
+  filter?: FilterCondition[];
   includeVectors?: boolean;
 }
 

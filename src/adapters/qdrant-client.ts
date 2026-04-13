@@ -26,6 +26,7 @@ export interface QdrantClientLike {
     request: {
       limit: number;
       offset?: QdrantPointId;
+      filter?: Record<string, unknown>;
       with_payload: true;
       with_vector: boolean;
     },

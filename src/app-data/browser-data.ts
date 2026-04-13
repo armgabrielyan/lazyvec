@@ -1,4 +1,5 @@
 import type { Collection, HealthStatus, VectorDBAdapter, VectorPage, VectorRecord } from "../adapters/types";
+import type { FilterCondition } from "../filter/parse";
 
 export interface BrowserDataOptions {
   pageSize: number;
@@ -41,9 +42,11 @@ export async function loadCollectionRecords(
   adapter: VectorDBAdapter,
   collectionName: string,
   options: BrowserDataOptions,
+  filter?: FilterCondition[],
 ): Promise<VectorPage> {
   return adapter.listRecords(collectionName, {
     limit: options.pageSize,
+    filter: filter && filter.length > 0 ? filter : undefined,
     includeVectors: false,
   });
 }
@@ -53,10 +56,12 @@ export async function loadNextCollectionRecords(
   collectionName: string,
   cursor: string,
   options: BrowserDataOptions,
+  filter?: FilterCondition[],
 ): Promise<VectorPage> {
   return adapter.listRecords(collectionName, {
     limit: options.pageSize,
     cursor,
+    filter: filter && filter.length > 0 ? filter : undefined,
     includeVectors: false,
   });
 }
