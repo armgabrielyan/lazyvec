@@ -1,6 +1,6 @@
 import { SyntaxStyle } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
-import { useMemo, useReducer, useRef } from "react";
+import { useEffect, useMemo, useReducer, useRef } from "react";
 import type { ReactNode } from "react";
 import { createAdapter as createDefaultAdapter } from "./adapters/registry";
 import type { Collection, VectorDBAdapter, VectorPage, VectorRecord } from "./adapters/types";
@@ -27,7 +27,8 @@ import {
   shouldShowStatusBar,
   statusTone,
 } from "./layout/view-state";
-import type { ConnectionProfile, ConnectionState, Panel, Screen } from "./types";
+import { checkConnectionReachable } from "./config/connection-status";
+import type { ConnectionProfile, ConnectionState, ConnectionStatus, Panel, Screen } from "./types";
 
 const panelOrder: Panel[] = ["collections", "records", "inspector"];
 const defaultPageSize = 50;
@@ -65,6 +66,7 @@ interface AppState {
   records: VectorRecord[];
   inspectedRecord: VectorRecord | null;
   collectionPanelWidth: number;
+  connectionStatuses: Record<string, ConnectionStatus>;
   recordCursor?: string;
 }
 
@@ -86,7 +88,8 @@ type AppAction =
   | { type: "LOAD_FAILURE"; error: string }
   | { type: "REFRESH_EMPTY" }
   | { type: "RESIZE_COLLECTION_PANEL"; delta: number }
-  | { type: "TOGGLE_HELP" };
+  | { type: "TOGGLE_HELP" }
+  | { type: "CONNECTION_STATUS_UPDATE"; connectionId: string; status: ConnectionStatus };
 
 interface AppProps {
   connectionState: ConnectionState;
@@ -109,6 +112,7 @@ export function createInitialState(connectionCount: number): AppState {
     records: [],
     inspectedRecord: null,
     collectionPanelWidth: defaultCollectionPanelWidth,
+    connectionStatuses: {},
   };
 }
 
@@ -324,6 +328,15 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         showHelp: !state.showHelp,
       };
+
+    case "CONNECTION_STATUS_UPDATE":
+      return {
+        ...state,
+        connectionStatuses: {
+          ...state.connectionStatuses,
+          [action.connectionId]: action.status,
+        },
+      };
   }
 }
 
@@ -346,6 +359,23 @@ export function App({
     await adapterRef.current?.disconnect();
     adapterRef.current = null;
   }
+
+  useEffect(() => {
+    if (state.screen !== "connections" || connections.length === 0) {
+      return;
+    }
+
+    for (const connection of connections) {
+      if (state.connectionStatuses[connection.id] !== undefined) {
+        continue;
+      }
+
+      dispatch({ type: "CONNECTION_STATUS_UPDATE", connectionId: connection.id, status: "checking" });
+      void checkConnectionReachable(connection).then((status) => {
+        dispatch({ type: "CONNECTION_STATUS_UPDATE", connectionId: connection.id, status });
+      });
+    }
+  }, [state.screen, connections, state.connectionStatuses]);
 
   function connectSelectedConnection() {
     dispatch({ type: "CONNECT_REQUEST", connectionName: selectedConnection?.name ?? null });
@@ -566,6 +596,7 @@ export function App({
           configPath={connectionState.onboarding.configPath}
           connections={connections}
           selectedIndex={state.selectedConnectionIndex}
+          statuses={state.connectionStatuses}
         />
       ) : (
         <MainView

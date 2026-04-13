@@ -10,6 +10,7 @@ describe("ConnectionSelect", () => {
         configPath="~/.lazyvec/config.toml"
         connections={[]}
         selectedIndex={0}
+        statuses={{}}
       />,
       { width: 80, height: 24 },
     );
