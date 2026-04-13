@@ -1,70 +1,137 @@
 import { describe, expect, test } from "bun:test";
+import type { TableSchema } from "./metadata-schema";
 import {
   formatRecordTableRow,
-  metadataLabel,
+  formatTableHeader,
   recordTableVisibleRowCount,
   visibleRecordWindow,
 } from "./record-table";
 
+const twoColumnSchema: TableSchema = {
+  columns: [
+    { name: "name", type: "string", nonNullRate: 1.0, avgValueLength: 10, score: 100 },
+    { name: "category", type: "string", nonNullRate: 0.8, avgValueLength: 8, score: 80 },
+  ],
+};
+
 describe("record table layout", () => {
-  test("formats rows with ID and label padded to content width", () => {
+  test("formats rows with ID and dynamic metadata columns", () => {
     const row = formatRecordTableRow(
       {
         id: "49",
-        metadata: {
-          file_name: "662a3ac7847574fa510569_Chris_Dyer_V6_p.jpeg",
-          image_url: "https://storage.googleapis.com/demo-midjourney/images/662a3ac7847574fa510569.jpeg",
-          name: "Chris Dyer",
-          url: "/styles/chris-dyer",
-        },
+        metadata: { name: "Chris Dyer", category: "art" },
         vector: null,
       },
       true,
+      twoColumnSchema,
       60,
     );
-    expect(row).toBe(`> 49           ${"Chris Dyer".padEnd(45)}`);
     expect(row.length).toBe(60);
+    expect(row).toContain("49");
+    expect(row).toContain("Chris Dyer");
+    expect(row).toContain("art");
   });
 
-  test("truncates long labels to fit content width", () => {
+  test("truncates long column values to fit allocated width", () => {
     const row = formatRecordTableRow(
       {
         id: "1",
-        metadata: { name: "A very long name that should be truncated to fit the panel" },
+        metadata: { name: "A very long name that should be truncated to fit", category: "tech" },
         vector: null,
       },
       false,
+      twoColumnSchema,
       40,
     );
     expect(row.length).toBe(40);
-    expect(row).toContain("A very long name that ...");
+    expect(row).toContain("...");
   });
 
-  test("finds useful metadata labels from preferred keys and regex patterns", () => {
-    expect(metadataLabel({ name: "Chris Dyer", file_name: "662a3.jpeg" })).toBe("Chris Dyer");
-    expect(metadataLabel({ display_name: "Catherine Hyde" })).toBe("Catherine Hyde");
-    expect(metadataLabel({ file_name: "662a302_Catherine_Hyde_V6_p.jpeg" })).toBe("662a302_Catherine_Hyde_V6_p.jpeg");
-    expect(metadataLabel({ document_title: "Embeddings guide", chunk_index: 3 })).toBe("Embeddings guide");
+  test("handles missing metadata fields gracefully", () => {
+    const row = formatRecordTableRow(
+      {
+        id: "5",
+        metadata: { name: "Alice" },
+        vector: null,
+      },
+      false,
+      twoColumnSchema,
+      60,
+    );
+    expect(row.length).toBe(60);
+    expect(row).toContain("Alice");
+    expect(row).toContain("-");
   });
 
-  test("matches broader descriptive keys via regex", () => {
-    expect(metadataLabel({ description: "A short summary" })).toBe("A short summary");
-    expect(metadataLabel({ category: "sports" })).toBe("sports");
-    expect(metadataLabel({ topic: "machine learning" })).toBe("machine learning");
-    expect(metadataLabel({ query: "how to embed text" })).toBe("how to embed text");
-    expect(metadataLabel({ prefix: "&" })).toBe("&");
-    expect(metadataLabel({ chunk_id: "chunk-42" })).toBe("chunk-42");
-    expect(metadataLabel({ doc_type: "article" })).toBe("article");
+  test("formats non-string values as strings", () => {
+    const schema: TableSchema = {
+      columns: [
+        { name: "score", type: "number", nonNullRate: 1.0, avgValueLength: 4, score: 100 },
+        { name: "active", type: "boolean", nonNullRate: 1.0, avgValueLength: 5, score: 90 },
+      ],
+    };
+    const row = formatRecordTableRow(
+      {
+        id: "1",
+        metadata: { score: 0.95, active: true },
+        vector: null,
+      },
+      false,
+      schema,
+      60,
+    );
+    expect(row).toContain("0.95");
+    expect(row).toContain("true");
   });
 
-  test("skips noisy keys but falls back to first scalar value", () => {
-    expect(metadataLabel({ image_url: "https://example.com/image.png", payload: { nested: true } })).toBe("https://example.com/image.png");
+  test("falls back to single label column when schema has no columns", () => {
+    const emptySchema: TableSchema = { columns: [] };
+    const row = formatRecordTableRow(
+      {
+        id: "1",
+        metadata: { name: "Alice", score: 42 },
+        vector: null,
+      },
+      false,
+      emptySchema,
+      40,
+    );
+    expect(row.length).toBe(40);
+    expect(row).toContain("1");
   });
 
-  test("falls back to first scalar value when no key pattern matches", () => {
-    expect(metadataLabel({ prefix: "&" })).toBe("&");
-    expect(metadataLabel({ score: 0.95, data: { nested: true } })).toBe("0.95");
-    expect(metadataLabel({ nested: { a: 1 }, list: [1, 2] })).toBe("-");
+  test("selected row starts with > prefix", () => {
+    const row = formatRecordTableRow(
+      { id: "1", metadata: { name: "A" }, vector: null },
+      true,
+      twoColumnSchema,
+      40,
+    );
+    expect(row.startsWith("> ")).toBe(true);
+  });
+
+  test("unselected row starts with space prefix", () => {
+    const row = formatRecordTableRow(
+      { id: "1", metadata: { name: "A" }, vector: null },
+      false,
+      twoColumnSchema,
+      40,
+    );
+    expect(row.startsWith("  ")).toBe(true);
+  });
+
+  test("formats table header with column names", () => {
+    const header = formatTableHeader(twoColumnSchema, 60);
+    expect(header.length).toBe(60);
+    expect(header).toContain("ID");
+    expect(header).toContain("name");
+    expect(header).toContain("category");
+  });
+
+  test("formats header for empty schema with just ID", () => {
+    const header = formatTableHeader({ columns: [] }, 40);
+    expect(header.length).toBe(40);
+    expect(header).toContain("ID");
   });
 
   test("derives a conservative visible row count from terminal height", () => {

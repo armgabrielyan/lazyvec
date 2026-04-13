@@ -1,67 +1,45 @@
 import type { VectorRecord } from "../adapters/types";
 import { clamp, pad } from "../format";
+import type { TableSchema } from "./metadata-schema";
 
 const nonRecordRowHeight = 22;
-const exactLabelKeys = ["name", "title", "label", "caption", "file_name", "filename", "source", "url", "path", "slug"];
-const labelKeyPatterns = [
-  /(^|[_-])(display[_-]?name|name|title|label|caption)($|[_-])/i,
-  /(^|[_-])(file[_-]?name|filename|source|url|path|slug)($|[_-])/i,
-  /(^|[_-])(description|summary|category|topic|type|kind|class|group|subject)($|[_-])/i,
-  /(^|[_-])(query|question|input|prefix|suffix|chunk|segment|snippet|excerpt)($|[_-])/i,
-  /(^|[_-])(id|key|ref|code|tag|status|role|author|owner)($|[_-])/i,
-];
-const noisyLabelKeyPattern = /(^|[_-])(image[_-]?url|thumbnail|avatar|icon|vector|embedding|text|content|body)($|[_-])/i;
-
 const idColumnWidth = 15;
+const columnSeparator = "  ";
+const minColumnWidth = 4;
 
-export function formatRecordTableRow(record: VectorRecord, selected: boolean, contentWidth?: number): string {
+export function formatRecordTableRow(
+  record: VectorRecord,
+  selected: boolean,
+  schema: TableSchema,
+  contentWidth?: number,
+): string {
   const prefix = selected ? "> " : "  ";
   const id = pad(record.id, 12);
-  const label = metadataLabel(record.metadata);
-  const labelWidth = contentWidth === undefined ? label.length : Math.max(1, contentWidth - idColumnWidth);
 
-  return `${prefix}${id} ${pad(label, labelWidth)}`;
+  if (schema.columns.length === 0 || contentWidth === undefined) {
+    const fallback = formatScalarFallback(record.metadata);
+    const labelWidth = contentWidth === undefined ? fallback.length : Math.max(1, contentWidth - idColumnWidth);
+    return `${prefix}${id} ${pad(fallback, labelWidth)}`;
+  }
+
+  const columnWidths = distributeColumnWidths(schema, contentWidth - idColumnWidth);
+  const cells = schema.columns.map((col, i) => pad(formatCellValue(record.metadata[col.name]), columnWidths[i]!));
+
+  return `${prefix}${id} ${cells.join(columnSeparator)}`;
 }
 
+export function formatTableHeader(schema: TableSchema, contentWidth: number): string {
+  const idHeader = pad("ID", 12);
 
-
-export function metadataLabel(metadata: Record<string, unknown>): string {
-  for (const key of exactLabelKeys) {
-    const value = metadata[key];
-    const label = labelPart(value);
-
-    if (label !== null) {
-      return label;
-    }
+  if (schema.columns.length === 0) {
+    return `  ${idHeader} ${pad("", Math.max(1, contentWidth - idColumnWidth))}`;
   }
 
-  for (const [key, value] of Object.entries(metadata)) {
-    if (noisyLabelKeyPattern.test(key)) {
-      continue;
-    }
+  const columnWidths = distributeColumnWidths(schema, contentWidth - idColumnWidth);
+  const headers = schema.columns.map((col, i) => pad(col.name, columnWidths[i]!));
 
-    if (!labelKeyPatterns.some((pattern) => pattern.test(key))) {
-      continue;
-    }
-
-    const label = labelPart(value);
-
-    if (label !== null) {
-      return label;
-    }
-  }
-
-  for (const value of Object.values(metadata)) {
-    const label = labelPart(value);
-
-    if (label !== null) {
-      return label;
-    }
-  }
-
-  return "-";
+  return `  ${idHeader} ${headers.join(columnSeparator)}`;
 }
-
 
 export function recordTableVisibleRowCount(terminalHeight: number): number {
   return Math.max(5, terminalHeight - nonRecordRowHeight);
@@ -92,15 +70,59 @@ export function visibleRecordWindow<T>(
   };
 }
 
-function labelPart(value: unknown): string | null {
-  if (typeof value === "string") {
-    const normalized = value.replace(/\s+/g, " ").trim();
-    return normalized.length === 0 ? null : normalized;
+function distributeColumnWidths(schema: TableSchema, availableWidth: number): number[] {
+  const columns = schema.columns;
+  const separatorTotal = (columns.length - 1) * columnSeparator.length;
+  const distributable = Math.max(columns.length * minColumnWidth, availableWidth - separatorTotal);
+
+  const maxHint = Math.floor(distributable * 0.4);
+  const hints = columns.map((col) => Math.min(maxHint, Math.max(col.name.length, col.avgValueLength, minColumnWidth)));
+  const totalHint = hints.reduce((sum, h) => sum + h, 0);
+
+  const widths = hints.map((hint) => {
+    const proportion = totalHint > 0 ? hint / totalHint : 1 / columns.length;
+    return Math.max(minColumnWidth, Math.floor(proportion * distributable));
+  });
+
+  let remainder = distributable - widths.reduce((sum, w) => sum + w, 0);
+  for (let i = 0; remainder > 0 && i < widths.length; i++) {
+    widths[i]!++;
+    remainder--;
   }
 
-  if (typeof value === "number") {
+  return widths;
+}
+
+function formatCellValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "-";
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    return normalized.length === 0 ? "-" : normalized;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
     return String(value);
   }
 
-  return null;
+  return "-";
+}
+
+function formatScalarFallback(metadata: Record<string, unknown>): string {
+  for (const value of Object.values(metadata)) {
+    if (typeof value === "string") {
+      const normalized = value.replace(/\s+/g, " ").trim();
+      if (normalized.length > 0) {
+        return normalized;
+      }
+    }
+
+    if (typeof value === "number") {
+      return String(value);
+    }
+  }
+
+  return "-";
 }

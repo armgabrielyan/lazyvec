@@ -18,7 +18,8 @@ import {
   formatInspectorVectorPreview,
   inspectorRecordForSelection,
 } from "./layout/inspector";
-import { formatRecordTableRow, recordTableVisibleRowCount, visibleRecordWindow } from "./layout/record-table";
+import { inferTableSchema, type TableSchema } from "./layout/metadata-schema";
+import { formatRecordTableRow, formatTableHeader, recordTableVisibleRowCount, visibleRecordWindow } from "./layout/record-table";
 import {
   collectionPanelEmptyMessage,
   formatStatusBarText,
@@ -69,6 +70,7 @@ interface AppState {
   inspectedRecord: VectorRecord | null;
   collectionPanelWidth: number;
   connectionStatuses: Record<string, ConnectionStatus>;
+  tableSchema: TableSchema;
   filterOpen: boolean;
   filterInput: string;
   filterCursor: number;
@@ -125,6 +127,7 @@ export function createInitialState(connectionCount: number): AppState {
     inspectedRecord: null,
     collectionPanelWidth: defaultCollectionPanelWidth,
     connectionStatuses: {},
+    tableSchema: { columns: [] },
     filterOpen: false,
     filterInput: "",
     filterCursor: 0,
@@ -176,6 +179,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         error: null,
         collections: action.data.collections,
         records: action.data.records,
+        tableSchema: inferTableSchema(action.data.records),
         inspectedRecord: null,
         recordCursor: action.data.recordCursor,
         status: "",
@@ -196,6 +200,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         focusedPanel: "collections",
         collections: [],
         records: [],
+        tableSchema: { columns: [] },
         inspectedRecord: null,
         loading: false,
         error: null,
@@ -226,6 +231,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         selectedCollectionIndex: action.index,
         selectedRecordIndex: 0,
         records: [],
+        tableSchema: { columns: [] },
         inspectedRecord: null,
         loading: true,
         error: null,
@@ -242,6 +248,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         selectedCollectionIndex: action.index,
         selectedRecordIndex: 0,
         records: action.page.records,
+        tableSchema: inferTableSchema(action.page.records),
         recordCursor: action.page.nextCursor,
         inspectedRecord: null,
         loading: false,
@@ -283,6 +290,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         focusedPanel: "records",
         selectedRecordIndex,
         records,
+        tableSchema: inferTableSchema(records),
         recordCursor: action.page.nextCursor,
         inspectedRecord: null,
         loading: false,
@@ -393,6 +401,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         activeFilter: action.conditions,
         selectedRecordIndex: 0,
         records: [],
+        tableSchema: { columns: [] },
         inspectedRecord: null,
         loading: true,
         error: null,
@@ -403,6 +412,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         records: action.page.records,
+        tableSchema: inferTableSchema(action.page.records),
         recordCursor: action.page.nextCursor,
         selectedRecordIndex: 0,
         loading: false,
@@ -776,6 +786,7 @@ export function App({
           selectedCollectionIndex={state.selectedCollectionIndex}
           selectedRecordIndex={state.selectedRecordIndex}
           statusBarVisible={shouldShowStatusBar({ error: state.error, loading: state.loading, status: state.status })}
+          tableSchema={state.tableSchema}
         />
       )}
 
@@ -850,6 +861,7 @@ interface MainViewProps {
   selectedCollectionIndex: number;
   selectedRecordIndex: number;
   statusBarVisible: boolean;
+  tableSchema: TableSchema;
 }
 
 function MainView({
@@ -867,6 +879,7 @@ function MainView({
   selectedCollectionIndex,
   selectedRecordIndex,
   statusBarVisible,
+  tableSchema,
 }: MainViewProps) {
   const { width, height } = useTerminalDimensions();
   const recordContentWidth = Math.max(40, width - collectionPanelWidth - 4);
@@ -897,6 +910,7 @@ function MainView({
             height={recordsHeight}
             loading={loading}
             records={records}
+            schema={tableSchema}
             selectedIndex={selectedRecordIndex}
           />
           <Inspector
@@ -1000,10 +1014,11 @@ interface RecordTableProps {
   height: number;
   loading: boolean;
   records: VectorRecord[];
+  schema: TableSchema;
   selectedIndex: number;
 }
 
-function RecordTable({ activeFilter, contentWidth, focused, height, loading, records, selectedIndex }: RecordTableProps) {
+function RecordTable({ activeFilter, contentWidth, focused, height, loading, records, schema, selectedIndex }: RecordTableProps) {
   const panelChrome = 4;
   const visibleRows = Math.max(5, height - panelChrome);
   const visibleRecords = visibleRecordWindow(records, selectedIndex, visibleRows);
@@ -1013,16 +1028,18 @@ function RecordTable({ activeFilter, contentWidth, focused, height, loading, rec
   });
 
   const filterSuffix = activeFilter.length > 0 ? " (filtered)" : "";
-  const title = `Records (${records.length})${filterSuffix} — ID / Label`;
+  const title = `Records (${records.length})${filterSuffix}`;
+  const header = formatTableHeader(schema, contentWidth);
 
   return (
     <PanelFrame focused={focused} height={height} title={title}>
       <box flexDirection="column" flexGrow={1}>
         {emptyMessage === null ? null : <text fg={colors.muted}>{emptyMessage}</text>}
+        {records.length > 0 ? <text fg={colors.accent}>{header}</text> : null}
         {visibleRecords.records.map((record, visibleIndex) => {
           const index = visibleRecords.startIndex + visibleIndex;
           const selected = index === selectedIndex;
-          const line = formatRecordTableRow(record, selected, contentWidth);
+          const line = formatRecordTableRow(record, selected, schema, contentWidth);
 
           return (
             <text key={`${record.id}-${index}`} fg={selected ? colors.text : colors.muted} bg={selected ? colors.selectedBg : undefined}>
