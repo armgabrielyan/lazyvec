@@ -38,10 +38,37 @@ bun run start -- --provider qdrant --url http://localhost:6333
 | `Tab` / `Shift+Tab` | Cycle main-view panel focus |
 | `[` / `]` | Resize the collection panel |
 | `/` | Open filter bar |
-| `Esc` | Close filter bar / clear active filter / back to connections |
+| `s` | Find similar records (vector search) |
+| `y i` | Copy record ID to clipboard |
+| `y m` | Copy metadata (JSON) to clipboard |
+| `y v` | Copy vector (JSON) to clipboard |
+| `Esc` | Close filter bar / clear search / clear filter / back to connections |
 | `c` | Return to the connection picker |
 | `r` | Refresh the current collection |
 | `?` | Toggle help |
+
+## Dynamic Columns
+
+The record table automatically samples loaded records to infer a metadata schema and displays
+the most useful fields as columns. Fields are ranked by non-null rate, value length, and type.
+Long values are truncated, and column widths are distributed proportionally based on content.
+
+## Find Similar
+
+Press `s` on a selected record to search for similar records by vector. If the record's vector
+hasn't been fetched yet, it is loaded automatically before searching. Results are displayed with
+a score column showing similarity. Press `Esc` to return to the normal record list.
+
+## Copy / Yank
+
+Press `y` to enter yank mode, then press a second key to choose what to copy:
+
+- `y i` — record ID
+- `y m` — metadata as JSON
+- `y v` — vector as JSON array (must be fetched first via `Enter`)
+
+Press `Esc` or any other key to cancel. Works on macOS (`pbcopy`), Linux (`xclip`), and
+Windows (`clip`).
 
 ## Filtering
 

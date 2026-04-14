@@ -13,6 +13,7 @@ import {
   type BrowserData,
 } from "./app-data/browser-data";
 import { ConnectionSelect } from "./components/ConnectionSelect";
+import { copyToClipboard } from "./clipboard";
 import { clamp, pad } from "./format";
 import { defaultCollectionPanelWidth, formatCollectionPanelRow, resizeCollectionPanelWidth } from "./layout/collection-panel";
 import {
@@ -74,6 +75,7 @@ interface AppState {
   tableSchema: TableSchema;
   searchResults: SearchResult[] | null;
   searchSourceId: string | null;
+  yankPending: boolean;
   filterOpen: boolean;
   filterInput: string;
   filterCursor: number;
@@ -109,7 +111,10 @@ type AppAction =
   | { type: "CLEAR_FILTER" }
   | { type: "SEARCH_SIMILAR_REQUEST"; sourceId: string }
   | { type: "SEARCH_SIMILAR_SUCCESS"; results: SearchResult[]; sourceId: string }
-  | { type: "CLEAR_SEARCH" };
+  | { type: "CLEAR_SEARCH" }
+  | { type: "YANK_PENDING" }
+  | { type: "YANK_COMPLETE"; message: string }
+  | { type: "YANK_CANCEL" };
 
 interface AppProps {
   connectionState: ConnectionState;
@@ -136,6 +141,7 @@ export function createInitialState(connectionCount: number): AppState {
     tableSchema: { columns: [] },
     searchResults: null,
     searchSourceId: null,
+    yankPending: false,
     filterOpen: false,
     filterInput: "",
     filterCursor: 0,
@@ -487,6 +493,27 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         error: null,
         status: "",
       };
+
+    case "YANK_PENDING":
+      return {
+        ...state,
+        yankPending: true,
+        status: "yank: i=id  m=metadata  v=vector",
+      };
+
+    case "YANK_COMPLETE":
+      return {
+        ...state,
+        yankPending: false,
+        status: action.message,
+      };
+
+    case "YANK_CANCEL":
+      return {
+        ...state,
+        yankPending: false,
+        status: "",
+      };
   }
 }
 
@@ -742,7 +769,9 @@ export function App({
     }
 
     if (key.name === "escape") {
-      if (state.showHelp) {
+      if (state.yankPending) {
+        dispatch({ type: "YANK_CANCEL" });
+      } else if (state.showHelp) {
         dispatch({ type: "TOGGLE_HELP" });
       } else if (state.filterOpen) {
         dispatch({ type: "CLOSE_FILTER" });
@@ -774,6 +803,39 @@ export function App({
       } else if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
         const value = input.slice(0, cursor) + key.sequence + input.slice(cursor);
         dispatch({ type: "UPDATE_FILTER_INPUT", value, cursor: cursor + 1 });
+      }
+      return;
+    }
+
+    if (state.yankPending) {
+      const record = selectedRecord;
+      const inspected = state.inspectedRecord;
+      dispatch({ type: "YANK_CANCEL" });
+
+      if (record === null) {
+        return;
+      }
+
+      if (key.name === "i") {
+        void copyToClipboard(record.id).then((ok) => {
+          dispatch({ type: "YANK_COMPLETE", message: ok ? `Copied ID: ${record.id}` : "Clipboard not available." });
+        });
+      } else if (key.name === "m") {
+        const metadata = inspected?.id === record.id ? inspected.metadata : record.metadata;
+        const json = JSON.stringify(metadata, null, 2);
+        void copyToClipboard(json).then((ok) => {
+          dispatch({ type: "YANK_COMPLETE", message: ok ? "Copied metadata to clipboard." : "Clipboard not available." });
+        });
+      } else if (key.name === "v") {
+        const vector = inspected?.id === record.id ? inspected.vector : record.vector;
+        if (vector === null) {
+          dispatch({ type: "YANK_COMPLETE", message: "No vector loaded. Press Enter to fetch first." });
+        } else {
+          const json = JSON.stringify(vector);
+          void copyToClipboard(json).then((ok) => {
+            dispatch({ type: "YANK_COMPLETE", message: ok ? "Copied vector to clipboard." : "Clipboard not available." });
+          });
+        }
       }
       return;
     }
@@ -838,6 +900,11 @@ export function App({
 
     if (key.name === "s" && (state.focusedPanel === "records" || state.focusedPanel === "inspector")) {
       searchSimilar();
+      return;
+    }
+
+    if (key.name === "y" && (state.focusedPanel === "records" || state.focusedPanel === "inspector")) {
+      dispatch({ type: "YANK_PENDING" });
       return;
     }
 
@@ -1270,6 +1337,9 @@ const mainHelpSections: HelpSection[] = [
     entries: [
       { action: "Next record page", key: "n / PageDown" },
       { action: "Find similar records", key: "s" },
+      { action: "Yank (copy) ID", key: "y i" },
+      { action: "Yank (copy) metadata", key: "y m" },
+      { action: "Yank (copy) vector", key: "y v" },
       { action: "Refresh collection", key: "r" },
       { action: "Back to connections", key: "Esc / c" },
     ],
