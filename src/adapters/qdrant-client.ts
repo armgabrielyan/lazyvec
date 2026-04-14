@@ -51,6 +51,12 @@ export interface QdrantClientLike {
       with_vector: boolean;
     },
   ): Promise<Array<QdrantPoint & { score: number }>>;
+  delete(
+    collectionName: string,
+    request: {
+      points: QdrantPointId[];
+    },
+  ): Promise<{ status: string }>;
 }
 
 export type QdrantClientFactory = (config: ConnectionProfile) => QdrantClientLike;

@@ -58,6 +58,10 @@ class FakeAdapter implements VectorDBAdapter {
   async searchByVector() {
     return [];
   }
+
+  async deleteRecords(_collection: string, ids: string[]) {
+    return { deleted: ids.length };
+  }
 }
 
 const qdrantConnection: ConnectionProfile = {

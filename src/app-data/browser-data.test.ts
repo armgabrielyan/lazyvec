@@ -87,6 +87,11 @@ class FakeAdapter implements VectorDBAdapter {
       { record: { id: "similar-2", metadata: { source: "blog" }, vector: null }, score: 0.82 },
     ].slice(0, opts.limit);
   }
+
+  async deleteRecords(_collection: string, ids: string[]) {
+    this.calls.push("deleteRecords");
+    return { deleted: ids.length };
+  }
 }
 
 describe("browser data loading", () => {

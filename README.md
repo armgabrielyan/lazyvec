@@ -2,8 +2,9 @@
 
 A terminal UI for browsing and inspecting vector databases.
 
-The current implementation is the v0.1 OpenTUI shell with a Qdrant read-only adapter. It starts
-with a connection picker, then loads collections and records from the selected connection.
+Built with OpenTUI React and Bun. Currently supports Qdrant. Start with a connection picker,
+browse collections and records, inspect metadata and vectors, search for similar records,
+and delete entries — all without leaving the terminal.
 
 ## Run
 
@@ -39,10 +40,12 @@ bun run start -- --provider qdrant --url http://localhost:6333
 | `[` / `]` | Resize the collection panel |
 | `/` | Open filter bar |
 | `s` | Find similar records (vector search) |
+| `d` | Delete selected record(s) with confirmation |
+| `V` | Enter visual selection mode |
 | `y i` | Copy record ID to clipboard |
 | `y m` | Copy metadata (JSON) to clipboard |
 | `y v` | Copy vector (JSON) to clipboard |
-| `Esc` | Close filter bar / clear search / clear filter / back to connections |
+| `Esc` | Cancel visual select / close filter / clear search / clear filter / back |
 | `c` | Return to the connection picker |
 | `r` | Refresh the current collection |
 | `?` | Toggle help |
@@ -69,6 +72,17 @@ Press `y` to enter yank mode, then press a second key to choose what to copy:
 
 Press `Esc` or any other key to cancel. Works on macOS (`pbcopy`), Linux (`xclip`), and
 Windows (`clip`).
+
+## Delete
+
+Press `d` on a selected record to delete it. A confirmation dialog appears — press `Enter`
+to confirm or `Esc` to cancel. This action cannot be undone.
+
+### Visual Selection
+
+Press `V` (shift+v) to enter visual selection mode. Move with `j`/`k` to extend the range,
+or `Space` to toggle individual records. Selected records are highlighted. Press `d` to delete
+all selected records, or `Esc` to cancel the selection.
 
 ## Filtering
 

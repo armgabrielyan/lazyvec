@@ -51,6 +51,7 @@ function createClient(overrides: Partial<QdrantClientLike> = {}): QdrantClientLi
       },
     ],
     search: async () => [],
+    delete: async () => ({ status: "completed" }),
     ...overrides,
   };
 }
@@ -67,7 +68,7 @@ describe("QdrantAdapter", () => {
       namespaces: false,
       searchByVector: true,
       searchByText: false,
-      deleteRecords: false,
+      deleteRecords: true,
     });
   });
 
@@ -274,5 +275,24 @@ describe("QdrantAdapter", () => {
     await expect(adapter.getRecord("rag_chunks", "missing")).rejects.toThrow(
       'Record "missing" was not found in collection "rag_chunks"',
     );
+  });
+
+  test("deletes records by ID", async () => {
+    let deleteRequest: unknown = null;
+    const adapter = new QdrantAdapter({
+      client: createClient({
+        delete: async (_collection, request) => {
+          deleteRequest = request;
+          return { status: "completed" };
+        },
+      }),
+    });
+
+    await adapter.connect(localConnection);
+
+    await expect(
+      adapter.deleteRecords("rag_chunks", ["doc-1", "42"]),
+    ).resolves.toEqual({ deleted: 2 });
+    expect(deleteRequest).toEqual({ points: ["doc-1", 42] });
   });
 });

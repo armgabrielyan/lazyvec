@@ -25,7 +25,7 @@ export const qdrantCapabilities: AdapterCapabilities = {
   namespaces: false,
   searchByVector: true,
   searchByText: false,
-  deleteRecords: false,
+  deleteRecords: true,
 };
 
 interface QdrantAdapterOptions {
@@ -150,6 +150,12 @@ export class QdrantAdapter implements VectorDBAdapter {
       record: normalizePoint(point),
       score: point.score,
     }));
+  }
+
+  async deleteRecords(collection: string, ids: string[]): Promise<{ deleted: number }> {
+    const points = ids.map(toQdrantPointId);
+    await this.requireClient().delete(collection, { points });
+    return { deleted: ids.length };
   }
 
   private requireClient(): QdrantClientLike {

@@ -75,6 +75,14 @@ export function searchSimilarRecords(
   return adapter.searchByVector(collectionName, { vector, limit });
 }
 
+export function deleteRecords(
+  adapter: VectorDBAdapter,
+  collectionName: string,
+  ids: string[],
+): Promise<{ deleted: number }> {
+  return adapter.deleteRecords(collectionName, ids);
+}
+
 export function loadRecordDetails(
   adapter: VectorDBAdapter,
   collectionName: string,

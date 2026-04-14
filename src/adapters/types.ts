@@ -75,4 +75,5 @@ export interface VectorDBAdapter {
   listRecords(collection: string, opts: ListOptions): Promise<VectorPage>;
   getRecord(collection: string, id: string): Promise<VectorRecord>;
   searchByVector(collection: string, opts: SearchOptions): Promise<SearchResult[]>;
+  deleteRecords(collection: string, ids: string[]): Promise<{ deleted: number }>;
 }

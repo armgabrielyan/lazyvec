@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { createAdapter as createDefaultAdapter } from "./adapters/registry";
 import type { Collection, SearchResult, VectorDBAdapter, VectorPage, VectorRecord } from "./adapters/types";
 import {
+  deleteRecords,
   loadCollectionRecords,
   loadInitialBrowserData,
   loadNextCollectionRecords,
@@ -76,6 +77,9 @@ interface AppState {
   searchResults: SearchResult[] | null;
   searchSourceId: string | null;
   yankPending: boolean;
+  visualAnchor: number | null;
+  selectedRecordIds: Set<string>;
+  deleteConfirmOpen: boolean;
   filterOpen: boolean;
   filterInput: string;
   filterCursor: number;
@@ -114,7 +118,15 @@ type AppAction =
   | { type: "CLEAR_SEARCH" }
   | { type: "YANK_PENDING" }
   | { type: "YANK_COMPLETE"; message: string }
-  | { type: "YANK_CANCEL" };
+  | { type: "YANK_CANCEL" }
+  | { type: "VISUAL_SELECT_START" }
+  | { type: "VISUAL_SELECT_MOVE"; delta: number; recordCount: number }
+  | { type: "VISUAL_SELECT_TOGGLE" }
+  | { type: "VISUAL_SELECT_CANCEL" }
+  | { type: "DELETE_CONFIRM_OPEN" }
+  | { type: "DELETE_CONFIRM_CANCEL" }
+  | { type: "DELETE_REQUEST" }
+  | { type: "DELETE_SUCCESS"; deleted: number };
 
 interface AppProps {
   connectionState: ConnectionState;
@@ -142,6 +154,9 @@ export function createInitialState(connectionCount: number): AppState {
     searchResults: null,
     searchSourceId: null,
     yankPending: false,
+    visualAnchor: null,
+    selectedRecordIds: new Set<string>(),
+    deleteConfirmOpen: false,
     filterOpen: false,
     filterInput: "",
     filterCursor: 0,
@@ -196,6 +211,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         tableSchema: inferTableSchema(action.data.records),
         searchResults: null,
         searchSourceId: null,
+        visualAnchor: null,
+        selectedRecordIds: new Set<string>(),
+        deleteConfirmOpen: false,
         inspectedRecord: null,
         recordCursor: action.data.recordCursor,
         status: "",
@@ -219,6 +237,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         tableSchema: { columns: [] },
         searchResults: null,
         searchSourceId: null,
+        visualAnchor: null,
+        selectedRecordIds: new Set<string>(),
+        deleteConfirmOpen: false,
         inspectedRecord: null,
         loading: false,
         error: null,
@@ -252,6 +273,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         tableSchema: { columns: [] },
         searchResults: null,
         searchSourceId: null,
+        visualAnchor: null,
+        selectedRecordIds: new Set<string>(),
+        deleteConfirmOpen: false,
         inspectedRecord: null,
         loading: true,
         error: null,
@@ -514,6 +538,96 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         yankPending: false,
         status: "",
       };
+
+    case "VISUAL_SELECT_START":
+      return {
+        ...state,
+        visualAnchor: state.selectedRecordIndex,
+        selectedRecordIds: new Set<string>([state.records[state.selectedRecordIndex]?.id].filter(Boolean) as string[]),
+        status: "VISUAL — move to extend, Space to toggle, d to delete, Esc to cancel",
+      };
+
+    case "VISUAL_SELECT_MOVE": {
+      if (state.visualAnchor === null || action.recordCount === 0) {
+        return state;
+      }
+
+      const newIndex = clamp(state.selectedRecordIndex + action.delta, 0, action.recordCount - 1);
+      const lo = Math.min(state.visualAnchor, newIndex);
+      const hi = Math.max(state.visualAnchor, newIndex);
+      const ids = new Set<string>();
+      for (let i = lo; i <= hi; i++) {
+        const id = state.records[i]?.id;
+        if (id !== undefined) {
+          ids.add(id);
+        }
+      }
+
+      return {
+        ...state,
+        selectedRecordIndex: newIndex,
+        selectedRecordIds: ids,
+        inspectedRecord: null,
+        status: `VISUAL — ${ids.size} selected`,
+      };
+    }
+
+    case "VISUAL_SELECT_TOGGLE": {
+      const id = state.records[state.selectedRecordIndex]?.id;
+      if (id === undefined) {
+        return state;
+      }
+
+      const ids = new Set(state.selectedRecordIds);
+      if (ids.has(id)) {
+        ids.delete(id);
+      } else {
+        ids.add(id);
+      }
+
+      return {
+        ...state,
+        selectedRecordIds: ids,
+        status: ids.size > 0 ? `VISUAL — ${ids.size} selected` : "VISUAL — none selected",
+      };
+    }
+
+    case "VISUAL_SELECT_CANCEL":
+      return {
+        ...state,
+        visualAnchor: null,
+        selectedRecordIds: new Set<string>(),
+        status: "",
+      };
+
+    case "DELETE_CONFIRM_OPEN":
+      return {
+        ...state,
+        deleteConfirmOpen: true,
+      };
+
+    case "DELETE_CONFIRM_CANCEL":
+      return {
+        ...state,
+        deleteConfirmOpen: false,
+      };
+
+    case "DELETE_REQUEST":
+      return {
+        ...state,
+        deleteConfirmOpen: false,
+        loading: true,
+        status: "Deleting...",
+      };
+
+    case "DELETE_SUCCESS":
+      return {
+        ...state,
+        visualAnchor: null,
+        selectedRecordIds: new Set<string>(),
+        loading: false,
+        status: `Deleted ${action.deleted} record(s).`,
+      };
   }
 }
 
@@ -753,6 +867,36 @@ export function App({
     })();
   }
 
+  function deleteSelectedRecords() {
+    const adapter = adapterRef.current;
+
+    if (adapter === null || selectedCollection === null) {
+      return;
+    }
+
+    const ids = state.selectedRecordIds.size > 0
+      ? [...state.selectedRecordIds]
+      : selectedRecord !== null ? [selectedRecord.id] : [];
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    const collectionName = selectedCollection.name;
+    const collectionIndex = state.selectedCollectionIndex;
+    dispatch({ type: "DELETE_REQUEST" });
+    void (async () => {
+      try {
+        const result = await deleteRecords(adapter, collectionName, ids);
+        dispatch({ type: "DELETE_SUCCESS", deleted: result.deleted });
+        const page = await loadCollectionRecords(adapter, collectionName, { pageSize });
+        dispatch({ type: "SELECT_COLLECTION_SUCCESS", index: collectionIndex, collectionName, page });
+      } catch (error) {
+        dispatch({ type: "LOAD_FAILURE", error: toErrorMessage(error) });
+      }
+    })();
+  }
+
   useKeyboard((key) => {
     if (key.eventType === "release") {
       return;
@@ -769,8 +913,12 @@ export function App({
     }
 
     if (key.name === "escape") {
-      if (state.yankPending) {
+      if (state.deleteConfirmOpen) {
+        dispatch({ type: "DELETE_CONFIRM_CANCEL" });
+      } else if (state.yankPending) {
         dispatch({ type: "YANK_CANCEL" });
+      } else if (state.visualAnchor !== null) {
+        dispatch({ type: "VISUAL_SELECT_CANCEL" });
       } else if (state.showHelp) {
         dispatch({ type: "TOGGLE_HELP" });
       } else if (state.filterOpen) {
@@ -782,6 +930,13 @@ export function App({
       } else if (state.screen === "main") {
         void disconnectCurrentAdapter();
         dispatch({ type: "BACK_TO_CONNECTIONS" });
+      }
+      return;
+    }
+
+    if (state.deleteConfirmOpen) {
+      if (key.name === "enter" || key.name === "return") {
+        deleteSelectedRecords();
       }
       return;
     }
@@ -862,6 +1017,19 @@ export function App({
       return;
     }
 
+    if (state.visualAnchor !== null) {
+      if (key.name === "down" || key.name === "j") {
+        dispatch({ type: "VISUAL_SELECT_MOVE", delta: 1, recordCount: state.records.length });
+      } else if (key.name === "up" || key.name === "k") {
+        dispatch({ type: "VISUAL_SELECT_MOVE", delta: -1, recordCount: state.records.length });
+      } else if (key.name === "space" || key.sequence === " ") {
+        dispatch({ type: "VISUAL_SELECT_TOGGLE" });
+      } else if (key.name === "d") {
+        dispatch({ type: "DELETE_CONFIRM_OPEN" });
+      }
+      return;
+    }
+
     if (key.name === "tab") {
       dispatch({ type: "CYCLE_FOCUS", delta: key.shift ? -1 : 1 });
       return;
@@ -905,6 +1073,16 @@ export function App({
 
     if (key.name === "y" && (state.focusedPanel === "records" || state.focusedPanel === "inspector")) {
       dispatch({ type: "YANK_PENDING" });
+      return;
+    }
+
+    if (key.shift && key.name === "v" && state.focusedPanel === "records") {
+      dispatch({ type: "VISUAL_SELECT_START" });
+      return;
+    }
+
+    if (key.name === "d" && state.focusedPanel === "records") {
+      dispatch({ type: "DELETE_CONFIRM_OPEN" });
       return;
     }
 
@@ -956,6 +1134,7 @@ export function App({
           collectionDimensions={selectedCollection?.dimensions ?? 0}
           collectionPanelWidth={state.collectionPanelWidth}
           collections={state.collections}
+          deleteConfirmOpen={state.deleteConfirmOpen}
           filterCursor={state.filterCursor}
           filterInput={state.filterInput}
           filterOpen={state.filterOpen}
@@ -966,6 +1145,7 @@ export function App({
           selectedCollectionIndex={state.selectedCollectionIndex}
           searchResults={state.searchResults}
           searchSourceId={state.searchSourceId}
+          selectedRecordIds={state.selectedRecordIds}
           selectedRecordIndex={state.selectedRecordIndex}
           statusBarVisible={shouldShowStatusBar({ error: state.error, loading: state.loading, status: state.status })}
           tableSchema={state.tableSchema}
@@ -1033,6 +1213,7 @@ interface MainViewProps {
   collectionDimensions: number;
   collectionPanelWidth: number;
   collections: Collection[];
+  deleteConfirmOpen: boolean;
   filterCursor: number;
   filterInput: string;
   filterOpen: boolean;
@@ -1043,6 +1224,7 @@ interface MainViewProps {
   searchResults: SearchResult[] | null;
   searchSourceId: string | null;
   selectedCollectionIndex: number;
+  selectedRecordIds: Set<string>;
   selectedRecordIndex: number;
   statusBarVisible: boolean;
   tableSchema: TableSchema;
@@ -1053,6 +1235,7 @@ function MainView({
   collectionDimensions,
   collectionPanelWidth,
   collections,
+  deleteConfirmOpen,
   filterCursor,
   filterInput,
   filterOpen,
@@ -1063,6 +1246,7 @@ function MainView({
   searchResults,
   searchSourceId,
   selectedCollectionIndex,
+  selectedRecordIds,
   selectedRecordIndex,
   statusBarVisible,
   tableSchema,
@@ -1100,6 +1284,7 @@ function MainView({
             searchResults={searchResults}
             searchSourceId={searchSourceId}
             selectedIndex={selectedRecordIndex}
+            selectedRecordIds={selectedRecordIds}
           />
           <Inspector
             collectionDimensions={collectionDimensions}
@@ -1109,6 +1294,11 @@ function MainView({
           />
         </box>
       </box>
+      {deleteConfirmOpen ? (
+        <box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center">
+          <DeleteConfirm count={selectedRecordIds.size > 0 ? selectedRecordIds.size : 1} />
+        </box>
+      ) : null}
     </box>
   );
 }
@@ -1206,9 +1396,10 @@ interface RecordTableProps {
   searchResults: SearchResult[] | null;
   searchSourceId: string | null;
   selectedIndex: number;
+  selectedRecordIds: Set<string>;
 }
 
-function RecordTable({ activeFilter, contentWidth, focused, height, loading, records, schema, searchResults, searchSourceId, selectedIndex }: RecordTableProps) {
+function RecordTable({ activeFilter, contentWidth, focused, height, loading, records, schema, searchResults, searchSourceId, selectedIndex, selectedRecordIds }: RecordTableProps) {
   const panelChrome = 4;
   const visibleRows = Math.max(5, height - panelChrome);
   const visibleRecords = visibleRecordWindow(records, selectedIndex, visibleRows);
@@ -1251,14 +1442,39 @@ function RecordTable({ activeFilter, contentWidth, focused, height, loading, rec
             ? pad(scoreMap.get(record.id)?.toFixed(4) ?? "-", scoreColumnWidth)
             : "";
 
+          const inVisualSelection = selectedRecordIds.has(record.id);
+          const fg = selected ? colors.text : inVisualSelection ? colors.text : colors.muted;
+          const bg = selected ? colors.selectedBg : inVisualSelection ? "#1e3a2a" : undefined;
+
           return (
-            <text key={`${record.id}-${index}`} fg={selected ? colors.text : colors.muted} bg={selected ? colors.selectedBg : undefined}>
+            <text key={`${record.id}-${index}`} fg={fg} bg={bg}>
               {scoreCell}{line}
             </text>
           );
         })}
       </box>
     </PanelFrame>
+  );
+}
+
+function DeleteConfirm({ count }: { count: number }) {
+  const label = count === 1 ? "1 record" : `${count} records`;
+
+  return (
+    <box
+      border
+      borderColor={colors.error}
+      backgroundColor={colors.statusBg}
+      width={50}
+      paddingX={2}
+      paddingY={1}
+      flexDirection="column"
+      gap={1}
+    >
+      <text fg={colors.text}>Delete {label}?</text>
+      <text fg={colors.error}>This action cannot be undone.</text>
+      <text fg={colors.muted}>Enter to confirm / Esc to cancel</text>
+    </box>
   );
 }
 
@@ -1340,6 +1556,8 @@ const mainHelpSections: HelpSection[] = [
       { action: "Yank (copy) ID", key: "y i" },
       { action: "Yank (copy) metadata", key: "y m" },
       { action: "Yank (copy) vector", key: "y v" },
+      { action: "Delete record(s)", key: "d" },
+      { action: "Visual select", key: "V" },
       { action: "Refresh collection", key: "r" },
       { action: "Back to connections", key: "Esc / c" },
     ],
