@@ -1,13 +1,5 @@
+import { colors } from "../theme";
 import type { ConnectionFormMode } from "../types";
-
-const colors = {
-  accent: "#7dd3fc",
-  border: "#3f4655",
-  error: "#fca5a5",
-  muted: "#8b95a7",
-  statusBg: "#10151f",
-  text: "#e5e7eb",
-};
 
 export interface ConnectionFormFields {
   name: string;
@@ -22,6 +14,8 @@ export interface ConnectionFormProps {
   cursors: [number, number, number];
   error: string | null;
 }
+
+export const connectionFormFieldKeys: (keyof ConnectionFormFields)[] = ["name", "provider", "url"];
 
 const fieldLabels = ["Name:", "Provider:", "URL:"];
 const labelWidth = 10;

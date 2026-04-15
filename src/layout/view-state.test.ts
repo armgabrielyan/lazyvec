@@ -50,11 +50,11 @@ describe("view state copy", () => {
   });
 
   test("hides idle connection-screen status chrome", () => {
-    expect(shouldShowStatusBar({ error: null, loading: false, status: "" })).toBe(false);
-    expect(shouldShowStatusBar({ error: null, loading: true, status: "" })).toBe(false);
-    expect(shouldShowStatusBar({ error: null, loading: true, status: "Connecting..." })).toBe(true);
-    expect(shouldShowStatusBar({ error: "Bad Request", loading: false, status: "" })).toBe(true);
-    expect(shouldShowStatusBar({ error: null, loading: false, status: "End of collection." })).toBe(true);
+    expect(shouldShowStatusBar({ error: null, status: "" })).toBe(false);
+    expect(shouldShowStatusBar({ error: null, status: "" })).toBe(false);
+    expect(shouldShowStatusBar({ error: null, status: "Connecting..." })).toBe(true);
+    expect(shouldShowStatusBar({ error: "Bad Request", status: "" })).toBe(true);
+    expect(shouldShowStatusBar({ error: null, status: "End of collection." })).toBe(true);
   });
 
   test("uses explicit empty and loading copy for panels", () => {

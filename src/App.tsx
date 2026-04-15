@@ -14,7 +14,7 @@ import {
   type BrowserData,
 } from "./app-data/browser-data";
 import { ConnectionDeleteConfirm } from "./components/ConnectionDeleteConfirm";
-import { ConnectionForm, fieldMaxLength, type ConnectionFormFields } from "./components/ConnectionForm";
+import { connectionFormFieldKeys, ConnectionForm, fieldMaxLength, type ConnectionFormFields } from "./components/ConnectionForm";
 import { ConnectionSelect } from "./components/ConnectionSelect";
 import { addConnectionToConfig, deleteConnectionFromConfig, updateConnectionInConfig, validateConnectionName, validateConnectionUrl } from "./config/config-writer";
 import { loadConnectionState } from "./config/connections";
@@ -26,7 +26,8 @@ import {
   inspectorRecordForSelection,
 } from "./layout/inspector";
 import { inferTableSchema, type TableSchema } from "./layout/metadata-schema";
-import { formatRecordTableRow, formatTableHeader, recordTableVisibleRowCount, visibleRecordWindow } from "./layout/record-table";
+import { distributeColumnWidths, formatRecordTableRow, formatTableHeader, idColumnWidth, recordTableVisibleRowCount, visibleRecordWindow } from "./layout/record-table";
+import { colors } from "./theme";
 import {
   collectionPanelEmptyMessage,
   formatStatusBarText,
@@ -42,23 +43,46 @@ import type { ConnectionFormMode, ConnectionProfile, ConnectionState, Connection
 
 const panelOrder: Panel[] = ["collections", "records", "inspector"];
 const defaultPageSize = 50;
+const searchLimit = 20;
+const EMPTY_STRING_SET: ReadonlySet<string> = new Set<string>();
 
-const colors = {
-  accent: "#7dd3fc",
-  border: "#3f4655",
-  error: "#fca5a5",
-  focus: "#a7f3d0",
-  headerBg: "#12312f",
-  headerBorder: "#28d7a4",
-  headerLabel: "#7dd3fc",
-  headerMuted: "#9fb8ad",
-  loading: "#facc15",
-  muted: "#8b95a7",
-  statusBg: "#10151f",
-  selectedBg: "#263141",
-  text: "#e5e7eb",
-  title: "#f8fafc",
-};
+interface TextEditResult {
+  value: string;
+  cursor: number;
+}
+
+function applyTextEditKey(
+  key: { name?: string; sequence?: string; ctrl?: boolean; meta?: boolean },
+  value: string,
+  cursor: number,
+  maxLength?: number,
+): TextEditResult | null {
+  if (key.name === "left") {
+    return { value, cursor: Math.max(0, cursor - 1) };
+  }
+  if (key.name === "right") {
+    return { value, cursor: Math.min(value.length, cursor + 1) };
+  }
+  if ((key.name === "backspace" || key.name === "delete") && cursor > 0) {
+    return { value: value.slice(0, cursor - 1) + value.slice(cursor), cursor: cursor - 1 };
+  }
+  if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
+    if (maxLength !== undefined && value.length >= maxLength) return null;
+    return { value: value.slice(0, cursor) + key.sequence + value.slice(cursor), cursor: cursor + 1 };
+  }
+  return null;
+}
+
+function clearedSearchState(): Pick<AppState, "tableSchema" | "searchResults" | "searchSourceId" | "visualAnchor" | "selectedRecordIds" | "deleteConfirmOpen"> {
+  return {
+    tableSchema: { columns: [] },
+    searchResults: null,
+    searchSourceId: null,
+    visualAnchor: null,
+    selectedRecordIds: EMPTY_STRING_SET as Set<string>,
+    deleteConfirmOpen: false,
+  };
+}
 
 type TuiDimension = number | "auto" | `${number}%`;
 
@@ -152,6 +176,7 @@ interface AppProps {
   connectionState: ConnectionState;
   createAdapter?: typeof createDefaultAdapter;
   pageSize?: number;
+  cliArgs?: string[];
 }
 
 const emptyFormFields: ConnectionFormFields = { name: "", provider: "qdrant", url: "" };
@@ -178,7 +203,7 @@ export function createInitialState(connections: ConnectionProfile[]): AppState {
     searchSourceId: null,
     yankPending: false,
     visualAnchor: null,
-    selectedRecordIds: new Set<string>(),
+    selectedRecordIds: EMPTY_STRING_SET as Set<string>,
     deleteConfirmOpen: false,
     filterOpen: false,
     filterInput: "",
@@ -229,6 +254,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "CONNECT_SUCCESS":
       return {
         ...state,
+        ...clearedSearchState(),
         screen: "main",
         focusedPanel: "collections",
         selectedCollectionIndex: 0,
@@ -238,11 +264,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         collections: action.data.collections,
         records: action.data.records,
         tableSchema: inferTableSchema(action.data.records),
-        searchResults: null,
-        searchSourceId: null,
-        visualAnchor: null,
-        selectedRecordIds: new Set<string>(),
-        deleteConfirmOpen: false,
         inspectedRecord: null,
         recordCursor: action.data.recordCursor,
         status: "",
@@ -259,16 +280,11 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "BACK_TO_CONNECTIONS":
       return {
         ...state,
+        ...clearedSearchState(),
         screen: "connections",
         focusedPanel: "collections",
         collections: [],
         records: [],
-        tableSchema: { columns: [] },
-        searchResults: null,
-        searchSourceId: null,
-        visualAnchor: null,
-        selectedRecordIds: new Set<string>(),
-        deleteConfirmOpen: false,
         inspectedRecord: null,
         loading: false,
         error: null,
@@ -296,15 +312,10 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "SELECT_COLLECTION_REQUEST":
       return {
         ...state,
+        ...clearedSearchState(),
         selectedCollectionIndex: action.index,
         selectedRecordIndex: 0,
         records: [],
-        tableSchema: { columns: [] },
-        searchResults: null,
-        searchSourceId: null,
-        visualAnchor: null,
-        selectedRecordIds: new Set<string>(),
-        deleteConfirmOpen: false,
         inspectedRecord: null,
         loading: true,
         error: null,
@@ -363,7 +374,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         focusedPanel: "records",
         selectedRecordIndex,
         records,
-        tableSchema: inferTableSchema(records),
+        tableSchema: state.tableSchema.columns.length > 0 ? state.tableSchema : inferTableSchema(action.page.records),
         recordCursor: action.page.nextCursor,
         inspectedRecord: null,
         loading: false,
@@ -625,7 +636,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         visualAnchor: null,
-        selectedRecordIds: new Set<string>(),
+        selectedRecordIds: EMPTY_STRING_SET as Set<string>,
         status: "",
       };
 
@@ -653,7 +664,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         visualAnchor: null,
-        selectedRecordIds: new Set<string>(),
+        selectedRecordIds: EMPTY_STRING_SET as Set<string>,
         loading: false,
         status: `Deleted ${action.deleted} record(s).`,
       };
@@ -683,8 +694,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       cursors[action.fieldIndex] = action.cursor;
 
       const fields = { ...state.connectionFormFields };
-      const fieldKeys: (keyof ConnectionFormFields)[] = ["name", "provider", "url"];
-      const key = fieldKeys[action.fieldIndex];
+      const key = connectionFormFieldKeys[action.fieldIndex];
       if (key !== undefined) {
         fields[key] = action.value;
       }
@@ -756,6 +766,7 @@ export function App({
   connectionState,
   createAdapter = createDefaultAdapter,
   pageSize = defaultPageSize,
+  cliArgs = process.argv.slice(2),
 }: AppProps) {
   const renderer = useRenderer();
   const adapterRef = useRef<VectorDBAdapter | null>(null);
@@ -920,7 +931,7 @@ export function App({
     const adapter = adapterRef.current;
 
     if (adapter === null || selectedCollection === null) {
-      dispatch({ type: "CLEAR_FILTER" });
+      dispatch({ type: "CLOSE_FILTER" });
       return;
     }
 
@@ -934,8 +945,6 @@ export function App({
       }
     })();
   }
-
-  const searchLimit = 20;
 
   function searchSimilar() {
     const adapter = adapterRef.current;
@@ -973,7 +982,6 @@ export function App({
     const adapter = adapterRef.current;
 
     if (adapter === null || selectedCollection === null) {
-      dispatch({ type: "CLEAR_SEARCH" });
       return;
     }
 
@@ -1048,7 +1056,7 @@ export function App({
           }
         }
 
-        const freshState = await loadConnectionState(process.argv.slice(2));
+        const freshState = await loadConnectionState(cliArgs);
         const merged = [...cliConnections, ...freshState.connections.filter((c) => c.source === "config")];
         dispatch({ type: "SAVE_CONNECTION_SUCCESS", connections: merged });
       } catch (error) {
@@ -1068,7 +1076,7 @@ export function App({
     void (async () => {
       try {
         await deleteConnectionFromConfig(conn.name);
-        const freshState = await loadConnectionState(process.argv.slice(2));
+        const freshState = await loadConnectionState(cliArgs);
         const merged = [...cliConnections, ...freshState.connections.filter((c) => c.source === "config")];
         dispatch({ type: "DELETE_CONNECTION_SUCCESS", connections: merged, deletedIndex });
       } catch (error) {
@@ -1120,8 +1128,7 @@ export function App({
 
     if (state.connectionFormMode !== null) {
       const fieldIndex = state.connectionFormFocusedField;
-      const fieldKeys: (keyof ConnectionFormFields)[] = ["name", "provider", "url"];
-      const fieldKey = fieldKeys[fieldIndex]!;
+      const fieldKey = connectionFormFieldKeys[fieldIndex]!;
       const value = state.connectionFormFields[fieldKey];
       const cursor = state.connectionFormCursors[fieldIndex] ?? 0;
 
@@ -1129,22 +1136,11 @@ export function App({
         saveConnection();
       } else if (key.name === "tab") {
         dispatch({ type: "CYCLE_CONNECTION_FORM_FOCUS", delta: key.shift ? -1 : 1 });
-      } else if (fieldIndex === 1) {
-        // Provider field handled by <select> component
-      } else {
-        if (key.name === "left") {
-          dispatch({ type: "UPDATE_CONNECTION_FORM_FIELD", fieldIndex, value, cursor: Math.max(0, cursor - 1) });
-        } else if (key.name === "right") {
-          dispatch({ type: "UPDATE_CONNECTION_FORM_FIELD", fieldIndex, value, cursor: Math.min(value.length, cursor + 1) });
-        } else if (key.name === "backspace" || key.name === "delete") {
-          if (cursor > 0) {
-            const next = value.slice(0, cursor - 1) + value.slice(cursor);
-            dispatch({ type: "UPDATE_CONNECTION_FORM_FIELD", fieldIndex, value: next, cursor: cursor - 1 });
-          }
-        } else if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
-          if (value.length >= fieldMaxLength) return;
-          const next = value.slice(0, cursor) + key.sequence + value.slice(cursor);
-          dispatch({ type: "UPDATE_CONNECTION_FORM_FIELD", fieldIndex, value: next, cursor: cursor + 1 });
+      } else if (fieldIndex !== 1) {
+        // Provider field is read-only; key events are intentionally dropped
+        const edit = applyTextEditKey(key, value, cursor, fieldMaxLength);
+        if (edit) {
+          dispatch({ type: "UPDATE_CONNECTION_FORM_FIELD", fieldIndex, value: edit.value, cursor: edit.cursor });
         }
       }
       return;
@@ -1169,18 +1165,11 @@ export function App({
 
       if (key.name === "enter" || key.name === "return") {
         applyFilter();
-      } else if (key.name === "left") {
-        dispatch({ type: "UPDATE_FILTER_INPUT", value: input, cursor: Math.max(0, cursor - 1) });
-      } else if (key.name === "right") {
-        dispatch({ type: "UPDATE_FILTER_INPUT", value: input, cursor: Math.min(input.length, cursor + 1) });
-      } else if (key.name === "backspace" || key.name === "delete") {
-        if (cursor > 0) {
-          const value = input.slice(0, cursor - 1) + input.slice(cursor);
-          dispatch({ type: "UPDATE_FILTER_INPUT", value, cursor: cursor - 1 });
+      } else {
+        const edit = applyTextEditKey(key, input, cursor);
+        if (edit) {
+          dispatch({ type: "UPDATE_FILTER_INPUT", value: edit.value, cursor: edit.cursor });
         }
-      } else if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
-        const value = input.slice(0, cursor) + key.sequence + input.slice(cursor);
-        dispatch({ type: "UPDATE_FILTER_INPUT", value, cursor: cursor + 1 });
       }
       return;
     }
@@ -1418,7 +1407,7 @@ export function App({
           searchSourceId={state.searchSourceId}
           selectedRecordIds={state.selectedRecordIds}
           selectedRecordIndex={state.selectedRecordIndex}
-          statusBarVisible={shouldShowStatusBar({ error: state.error, loading: state.loading, status: state.status })}
+          statusBarVisible={shouldShowStatusBar({ error: state.error, status: state.status })}
           tableSchema={state.tableSchema}
         />
       )}
@@ -1428,7 +1417,7 @@ export function App({
           <HelpOverlay screen={state.screen} />
         </box>
       ) : null}
-      {shouldShowStatusBar({ error: state.error, loading: state.loading, status: state.status }) ? (
+      {shouldShowStatusBar({ error: state.error, status: state.status }) ? (
         <StatusBar
           error={state.error}
           loading={state.loading}
@@ -1694,10 +1683,15 @@ function RecordTable({ activeFilter, contentWidth, focused, height, loading, rec
   const scoreColumnWidth = 8;
   const dataWidth = isSearchMode ? contentWidth - scoreColumnWidth : contentWidth;
 
+  const columnWidths = useMemo(
+    () => schema.columns.length > 0 ? distributeColumnWidths(schema, dataWidth - idColumnWidth) : undefined,
+    [schema, dataWidth],
+  );
+
   const title = isSearchMode
     ? `Similar to ${searchSourceId} (${records.length})`
     : `Records (${records.length})${activeFilter.length > 0 ? " (filtered)" : ""}`;
-  const header = formatTableHeader(schema, dataWidth);
+  const header = formatTableHeader(schema, dataWidth, columnWidths);
   const scoreHeader = isSearchMode ? pad("score", scoreColumnWidth) : "";
 
   return (
@@ -1708,14 +1702,14 @@ function RecordTable({ activeFilter, contentWidth, focused, height, loading, rec
         {visibleRecords.records.map((record, visibleIndex) => {
           const index = visibleRecords.startIndex + visibleIndex;
           const selected = index === selectedIndex;
-          const line = formatRecordTableRow(record, selected, schema, dataWidth);
+          const line = formatRecordTableRow(record, selected, schema, dataWidth, columnWidths);
           const scoreCell = scoreMap !== null
             ? pad(scoreMap.get(record.id)?.toFixed(4) ?? "-", scoreColumnWidth)
             : "";
 
           const inVisualSelection = selectedRecordIds.has(record.id);
           const fg = selected ? colors.text : inVisualSelection ? colors.text : colors.muted;
-          const bg = selected ? colors.selectedBg : inVisualSelection ? "#1e3a2a" : undefined;
+          const bg = selected ? colors.selectedBg : inVisualSelection ? colors.visualSelectBg : undefined;
 
           return (
             <text key={`${record.id}-${index}`} fg={fg} bg={bg}>
@@ -1757,6 +1751,8 @@ interface InspectorProps {
 }
 
 function Inspector({ collectionDimensions, focused, height, record }: InspectorProps) {
+  const syntaxStyle = useMemo(() => SyntaxStyle.create(), []);
+
   if (record === null) {
     return (
       <PanelFrame focused={focused} height={height} title="Inspector">
@@ -1766,7 +1762,6 @@ function Inspector({ collectionDimensions, focused, height, record }: InspectorP
   }
 
   const payloadJson = JSON.stringify(record.metadata, null, 2);
-  const syntaxStyle = useMemo(() => SyntaxStyle.create(), []);
   const vectorPreview = formatInspectorVectorPreview(record.vector);
 
   return (

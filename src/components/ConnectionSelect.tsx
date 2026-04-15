@@ -1,15 +1,6 @@
 import { pad } from "../format";
+import { colors } from "../theme";
 import type { ConnectionProfile, ConnectionStatus } from "../types";
-
-const colors = {
-  border: "#3f4655",
-  header: "#7dd3fc",
-  muted: "#8b95a7",
-  reachable: "#a7f3d0",
-  selectedBg: "#263141",
-  text: "#e5e7eb",
-  unreachable: "#fca5a5",
-};
 
 const fixedColumns = {
   marker: 2,
@@ -78,7 +69,7 @@ function ConnectionList({
 
   return (
     <box flexDirection="column">
-      <text fg={colors.header}>{headerLine}</text>
+      <text fg={colors.accent}>{headerLine}</text>
       <text fg={colors.border}>{"─".repeat(totalWidth)}</text>
       {connections.map((connection, index) => {
         const selected = index === selectedIndex;

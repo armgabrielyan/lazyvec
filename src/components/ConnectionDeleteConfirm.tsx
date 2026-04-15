@@ -1,10 +1,4 @@
-const colors = {
-  accent: "#7dd3fc",
-  error: "#fca5a5",
-  muted: "#8b95a7",
-  statusBg: "#10151f",
-  text: "#e5e7eb",
-};
+import { colors } from "../theme";
 
 interface ConnectionDeleteConfirmProps {
   connectionName: string;

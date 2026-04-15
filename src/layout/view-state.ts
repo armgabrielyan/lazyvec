@@ -27,7 +27,6 @@ interface HeaderParts {
 
 interface StatusBarVisibilityState {
   error: string | null;
-  loading: boolean;
   status: string;
 }
 
@@ -57,7 +56,7 @@ export function headerParts({ connectionName }: HeaderTextState): HeaderParts {
   };
 }
 
-export function shouldShowStatusBar({ error, loading, status }: StatusBarVisibilityState): boolean {
+export function shouldShowStatusBar({ error, status }: StatusBarVisibilityState): boolean {
   const hasMessage = status.trim().length > 0;
   return error !== null || hasMessage;
 }

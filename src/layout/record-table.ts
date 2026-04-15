@@ -3,7 +3,7 @@ import { clamp, pad } from "../format";
 import type { TableSchema } from "./metadata-schema";
 
 const nonRecordRowHeight = 22;
-const idColumnWidth = 15;
+export const idColumnWidth = 15;
 const columnSeparator = "  ";
 const minColumnWidth = 4;
 
@@ -12,6 +12,7 @@ export function formatRecordTableRow(
   selected: boolean,
   schema: TableSchema,
   contentWidth?: number,
+  precomputedWidths?: number[],
 ): string {
   const prefix = selected ? "> " : "  ";
   const id = pad(record.id, 12);
@@ -22,20 +23,20 @@ export function formatRecordTableRow(
     return `${prefix}${id} ${pad(fallback, labelWidth)}`;
   }
 
-  const columnWidths = distributeColumnWidths(schema, contentWidth - idColumnWidth);
+  const columnWidths = precomputedWidths ?? distributeColumnWidths(schema, contentWidth - idColumnWidth);
   const cells = schema.columns.map((col, i) => pad(formatCellValue(record.metadata[col.name]), columnWidths[i]!));
 
   return `${prefix}${id} ${cells.join(columnSeparator)}`;
 }
 
-export function formatTableHeader(schema: TableSchema, contentWidth: number): string {
+export function formatTableHeader(schema: TableSchema, contentWidth: number, precomputedWidths?: number[]): string {
   const idHeader = pad("ID", 12);
 
   if (schema.columns.length === 0) {
     return `  ${idHeader} ${pad("", Math.max(1, contentWidth - idColumnWidth))}`;
   }
 
-  const columnWidths = distributeColumnWidths(schema, contentWidth - idColumnWidth);
+  const columnWidths = precomputedWidths ?? distributeColumnWidths(schema, contentWidth - idColumnWidth);
   const headers = schema.columns.map((col, i) => pad(col.name, columnWidths[i]!));
 
   return `  ${idHeader} ${headers.join(columnSeparator)}`;
@@ -70,7 +71,7 @@ export function visibleRecordWindow<T>(
   };
 }
 
-function distributeColumnWidths(schema: TableSchema, availableWidth: number): number[] {
+export function distributeColumnWidths(schema: TableSchema, availableWidth: number): number[] {
   const columns = schema.columns;
   const separatorTotal = (columns.length - 1) * columnSeparator.length;
   const distributable = Math.max(columns.length * minColumnWidth, availableWidth - separatorTotal);
