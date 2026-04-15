@@ -131,7 +131,7 @@ async function flushAsyncRender(renderOnce: () => Promise<void>) {
 
 describe("app reducer record pagination", () => {
   test("appends next record page and selects the first appended record", () => {
-    const connected = appReducer(createInitialState(1), {
+    const connected = appReducer(createInitialState([{ id: "test", name: "test", provider: "qdrant", url: "http://localhost:6333", description: "test", source: "config" }]), {
       type: "CONNECT_SUCCESS",
       connectionName: "local-qdrant",
       data: initialData,
@@ -163,7 +163,7 @@ describe("app reducer record pagination", () => {
   });
 
   test("keeps records unchanged when there is no next page cursor", () => {
-    const connected = appReducer(createInitialState(1), {
+    const connected = appReducer(createInitialState([{ id: "test", name: "test", provider: "qdrant", url: "http://localhost:6333", description: "test", source: "config" }]), {
       type: "CONNECT_SUCCESS",
       connectionName: "local-qdrant",
       data: {
@@ -183,7 +183,7 @@ describe("app reducer record pagination", () => {
 
 describe("app reducer record inspection", () => {
   test("updates the record in the list with full metadata from inspection", () => {
-    const connected = appReducer(createInitialState(1), {
+    const connected = appReducer(createInitialState([{ id: "test", name: "test", provider: "qdrant", url: "http://localhost:6333", description: "test", source: "config" }]), {
       type: "CONNECT_SUCCESS",
       connectionName: "local-qdrant",
       data: {
@@ -215,7 +215,7 @@ describe("app reducer record inspection", () => {
 
 describe("app reducer focus cycling", () => {
   test("clears inspected record when cycling focus so the inspector follows selection", () => {
-    const connected = appReducer(createInitialState(1), {
+    const connected = appReducer(createInitialState([{ id: "test", name: "test", provider: "qdrant", url: "http://localhost:6333", description: "test", source: "config" }]), {
       type: "CONNECT_SUCCESS",
       connectionName: "local-qdrant",
       data: {
@@ -244,7 +244,7 @@ describe("app reducer focus cycling", () => {
 
 describe("app reducer view copy", () => {
   test("leaves successful empty-record selection quiet because the records panel shows emptiness", () => {
-    const connected = appReducer(createInitialState(1), {
+    const connected = appReducer(createInitialState([{ id: "test", name: "test", provider: "qdrant", url: "http://localhost:6333", description: "test", source: "config" }]), {
       type: "CONNECT_SUCCESS",
       connectionName: "local-qdrant",
       data: initialData,
@@ -263,7 +263,7 @@ describe("app reducer view copy", () => {
   });
 
   test("keeps record movement quiet because the inspector updates with the selection", () => {
-    const connected = appReducer(createInitialState(1), {
+    const connected = appReducer(createInitialState([{ id: "test", name: "test", provider: "qdrant", url: "http://localhost:6333", description: "test", source: "config" }]), {
       type: "CONNECT_SUCCESS",
       connectionName: "local-qdrant",
       data: {

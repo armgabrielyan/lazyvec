@@ -13,7 +13,11 @@ import {
   searchSimilarRecords,
   type BrowserData,
 } from "./app-data/browser-data";
+import { ConnectionDeleteConfirm } from "./components/ConnectionDeleteConfirm";
+import { ConnectionForm, fieldMaxLength, type ConnectionFormFields } from "./components/ConnectionForm";
 import { ConnectionSelect } from "./components/ConnectionSelect";
+import { addConnectionToConfig, deleteConnectionFromConfig, updateConnectionInConfig, validateConnectionName, validateConnectionUrl } from "./config/config-writer";
+import { loadConnectionState } from "./config/connections";
 import { copyToClipboard } from "./clipboard";
 import { clamp, pad } from "./format";
 import { defaultCollectionPanelWidth, formatCollectionPanelRow, resizeCollectionPanelWidth } from "./layout/collection-panel";
@@ -34,7 +38,7 @@ import {
 import { checkConnectionReachable } from "./config/connection-status";
 import type { FilterCondition } from "./filter/parse";
 import { formatFilterSummary, parseFilterInput } from "./filter/parse";
-import type { ConnectionProfile, ConnectionState, ConnectionStatus, Panel, Screen } from "./types";
+import type { ConnectionFormMode, ConnectionProfile, ConnectionState, ConnectionStatus, Panel, Screen } from "./types";
 
 const panelOrder: Panel[] = ["collections", "records", "inspector"];
 const defaultPageSize = 50;
@@ -60,6 +64,7 @@ type TuiDimension = number | "auto" | `${number}%`;
 
 interface AppState {
   screen: Screen;
+  connections: ConnectionProfile[];
   selectedConnectionIndex: number;
   selectedCollectionIndex: number;
   selectedRecordIndex: number;
@@ -85,6 +90,12 @@ interface AppState {
   filterCursor: number;
   activeFilter: FilterCondition[];
   recordCursor?: string;
+  connectionFormMode: ConnectionFormMode | null;
+  connectionFormFields: ConnectionFormFields;
+  connectionFormFocusedField: number;
+  connectionFormCursors: [number, number, number];
+  connectionFormError: string | null;
+  connectionDeleteConfirmOpen: boolean;
 }
 
 type AppAction =
@@ -126,7 +137,16 @@ type AppAction =
   | { type: "DELETE_CONFIRM_OPEN" }
   | { type: "DELETE_CONFIRM_CANCEL" }
   | { type: "DELETE_REQUEST" }
-  | { type: "DELETE_SUCCESS"; deleted: number };
+  | { type: "DELETE_SUCCESS"; deleted: number }
+  | { type: "OPEN_CONNECTION_FORM"; mode: ConnectionFormMode; fields: ConnectionFormFields }
+  | { type: "CLOSE_CONNECTION_FORM" }
+  | { type: "UPDATE_CONNECTION_FORM_FIELD"; fieldIndex: number; value: string; cursor: number }
+  | { type: "CYCLE_CONNECTION_FORM_FOCUS"; delta: number }
+  | { type: "SET_CONNECTION_FORM_ERROR"; error: string }
+  | { type: "SAVE_CONNECTION_SUCCESS"; connections: ConnectionProfile[] }
+  | { type: "OPEN_CONNECTION_DELETE_CONFIRM" }
+  | { type: "CLOSE_CONNECTION_DELETE_CONFIRM" }
+  | { type: "DELETE_CONNECTION_SUCCESS"; connections: ConnectionProfile[]; deletedIndex: number };
 
 interface AppProps {
   connectionState: ConnectionState;
@@ -134,9 +154,12 @@ interface AppProps {
   pageSize?: number;
 }
 
-export function createInitialState(connectionCount: number): AppState {
+const emptyFormFields: ConnectionFormFields = { name: "", provider: "qdrant", url: "" };
+
+export function createInitialState(connections: ConnectionProfile[]): AppState {
   return {
     screen: "connections",
+    connections,
     selectedConnectionIndex: 0,
     selectedCollectionIndex: 0,
     selectedRecordIndex: 0,
@@ -161,6 +184,12 @@ export function createInitialState(connectionCount: number): AppState {
     filterInput: "",
     filterCursor: 0,
     activeFilter: [],
+    connectionFormMode: null,
+    connectionFormFields: emptyFormFields,
+    connectionFormFocusedField: 0,
+    connectionFormCursors: [0, 0, 0],
+    connectionFormError: null,
+    connectionDeleteConfirmOpen: false,
   };
 }
 
@@ -628,6 +657,98 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         loading: false,
         status: `Deleted ${action.deleted} record(s).`,
       };
+
+    case "OPEN_CONNECTION_FORM":
+      return {
+        ...state,
+        connectionFormMode: action.mode,
+        connectionFormFields: action.fields,
+        connectionFormFocusedField: 0,
+        connectionFormCursors: [action.fields.name.length, 0, action.fields.url.length],
+        connectionFormError: null,
+      };
+
+    case "CLOSE_CONNECTION_FORM":
+      return {
+        ...state,
+        connectionFormMode: null,
+        connectionFormFields: emptyFormFields,
+        connectionFormFocusedField: 0,
+        connectionFormCursors: [0, 0, 0],
+        connectionFormError: null,
+      };
+
+    case "UPDATE_CONNECTION_FORM_FIELD": {
+      const cursors = [...state.connectionFormCursors] as [number, number, number];
+      cursors[action.fieldIndex] = action.cursor;
+
+      const fields = { ...state.connectionFormFields };
+      const fieldKeys: (keyof ConnectionFormFields)[] = ["name", "provider", "url"];
+      const key = fieldKeys[action.fieldIndex];
+      if (key !== undefined) {
+        fields[key] = action.value;
+      }
+
+      return {
+        ...state,
+        connectionFormFields: fields,
+        connectionFormCursors: cursors,
+        connectionFormError: null,
+      };
+    }
+
+    case "CYCLE_CONNECTION_FORM_FOCUS": {
+      const fieldCount = 3;
+      const next = (state.connectionFormFocusedField + action.delta + fieldCount) % fieldCount;
+      return {
+        ...state,
+        connectionFormFocusedField: next,
+      };
+    }
+
+    case "SET_CONNECTION_FORM_ERROR":
+      return {
+        ...state,
+        connectionFormError: action.error,
+      };
+
+    case "SAVE_CONNECTION_SUCCESS":
+      return {
+        ...state,
+        connections: action.connections,
+        connectionFormMode: null,
+        connectionFormFields: emptyFormFields,
+        connectionFormFocusedField: 0,
+        connectionFormCursors: [0, 0, 0],
+        connectionFormError: null,
+        status: "Connection saved.",
+      };
+
+    case "OPEN_CONNECTION_DELETE_CONFIRM":
+      return {
+        ...state,
+        connectionDeleteConfirmOpen: true,
+      };
+
+    case "CLOSE_CONNECTION_DELETE_CONFIRM":
+      return {
+        ...state,
+        connectionDeleteConfirmOpen: false,
+      };
+
+    case "DELETE_CONNECTION_SUCCESS": {
+      const newIndex = action.deletedIndex >= action.connections.length
+        ? Math.max(0, action.connections.length - 1)
+        : action.deletedIndex;
+
+      return {
+        ...state,
+        connections: action.connections,
+        connectionDeleteConfirmOpen: false,
+        selectedConnectionIndex: newIndex,
+        status: "Connection deleted.",
+      };
+    }
   }
 }
 
@@ -638,9 +759,9 @@ export function App({
 }: AppProps) {
   const renderer = useRenderer();
   const adapterRef = useRef<VectorDBAdapter | null>(null);
-  const connections = connectionState.connections;
-  const [state, dispatch] = useReducer(appReducer, connections.length, createInitialState);
+  const [state, dispatch] = useReducer(appReducer, connectionState.connections, createInitialState);
 
+  const connections = state.connections;
   const selectedConnection = connections[state.selectedConnectionIndex] ?? null;
   const selectedCollection = state.collections[state.selectedCollectionIndex] ?? null;
   const selectedRecord = state.records[state.selectedRecordIndex] ?? null;
@@ -897,6 +1018,65 @@ export function App({
     })();
   }
 
+  function saveConnection() {
+    const { connectionFormMode: mode, connectionFormFields: fields } = state;
+    if (mode === null) return;
+
+    const nameError = validateConnectionName(fields.name);
+    if (nameError) {
+      dispatch({ type: "SET_CONNECTION_FORM_ERROR", error: nameError });
+      return;
+    }
+
+    const urlError = validateConnectionUrl(fields.url);
+    if (urlError) {
+      dispatch({ type: "SET_CONNECTION_FORM_ERROR", error: urlError });
+      return;
+    }
+
+    const input = { name: fields.name, provider: fields.provider as "qdrant", url: fields.url };
+    const cliConnections = connections.filter((c) => c.source === "cli");
+
+    void (async () => {
+      try {
+        if (mode.kind === "add") {
+          await addConnectionToConfig(input);
+        } else {
+          const oldConnection = connections.find((c) => c.id === mode.connectionId);
+          if (oldConnection) {
+            await updateConnectionInConfig(oldConnection.name, input);
+          }
+        }
+
+        const freshState = await loadConnectionState(process.argv.slice(2));
+        const merged = [...cliConnections, ...freshState.connections.filter((c) => c.source === "config")];
+        dispatch({ type: "SAVE_CONNECTION_SUCCESS", connections: merged });
+      } catch (error) {
+        dispatch({ type: "SET_CONNECTION_FORM_ERROR", error: toErrorMessage(error) });
+      }
+    })();
+  }
+
+  function deleteSelectedConnection() {
+    const conn = selectedConnection;
+    if (conn === null || conn.source !== "config") return;
+
+    const deletedIndex = state.selectedConnectionIndex;
+    const cliConnections = connections.filter((c) => c.source === "cli");
+
+    dispatch({ type: "CLOSE_CONNECTION_DELETE_CONFIRM" });
+    void (async () => {
+      try {
+        await deleteConnectionFromConfig(conn.name);
+        const freshState = await loadConnectionState(process.argv.slice(2));
+        const merged = [...cliConnections, ...freshState.connections.filter((c) => c.source === "config")];
+        dispatch({ type: "DELETE_CONNECTION_SUCCESS", connections: merged, deletedIndex });
+      } catch (error) {
+        dispatch({ type: "LOAD_FAILURE", error: toErrorMessage(error) });
+      }
+    })();
+  }
+
   useKeyboard((key) => {
     if (key.eventType === "release") {
       return;
@@ -913,7 +1093,11 @@ export function App({
     }
 
     if (key.name === "escape") {
-      if (state.deleteConfirmOpen) {
+      if (state.connectionFormMode !== null) {
+        dispatch({ type: "CLOSE_CONNECTION_FORM" });
+      } else if (state.connectionDeleteConfirmOpen) {
+        dispatch({ type: "CLOSE_CONNECTION_DELETE_CONFIRM" });
+      } else if (state.deleteConfirmOpen) {
         dispatch({ type: "DELETE_CONFIRM_CANCEL" });
       } else if (state.yankPending) {
         dispatch({ type: "YANK_CANCEL" });
@@ -930,6 +1114,45 @@ export function App({
       } else if (state.screen === "main") {
         void disconnectCurrentAdapter();
         dispatch({ type: "BACK_TO_CONNECTIONS" });
+      }
+      return;
+    }
+
+    if (state.connectionFormMode !== null) {
+      const fieldIndex = state.connectionFormFocusedField;
+      const fieldKeys: (keyof ConnectionFormFields)[] = ["name", "provider", "url"];
+      const fieldKey = fieldKeys[fieldIndex]!;
+      const value = state.connectionFormFields[fieldKey];
+      const cursor = state.connectionFormCursors[fieldIndex] ?? 0;
+
+      if (key.name === "enter" || key.name === "return") {
+        saveConnection();
+      } else if (key.name === "tab") {
+        dispatch({ type: "CYCLE_CONNECTION_FORM_FOCUS", delta: key.shift ? -1 : 1 });
+      } else if (fieldIndex === 1) {
+        // Provider field handled by <select> component
+      } else {
+        if (key.name === "left") {
+          dispatch({ type: "UPDATE_CONNECTION_FORM_FIELD", fieldIndex, value, cursor: Math.max(0, cursor - 1) });
+        } else if (key.name === "right") {
+          dispatch({ type: "UPDATE_CONNECTION_FORM_FIELD", fieldIndex, value, cursor: Math.min(value.length, cursor + 1) });
+        } else if (key.name === "backspace" || key.name === "delete") {
+          if (cursor > 0) {
+            const next = value.slice(0, cursor - 1) + value.slice(cursor);
+            dispatch({ type: "UPDATE_CONNECTION_FORM_FIELD", fieldIndex, value: next, cursor: cursor - 1 });
+          }
+        } else if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
+          if (value.length >= fieldMaxLength) return;
+          const next = value.slice(0, cursor) + key.sequence + value.slice(cursor);
+          dispatch({ type: "UPDATE_CONNECTION_FORM_FIELD", fieldIndex, value: next, cursor: cursor + 1 });
+        }
+      }
+      return;
+    }
+
+    if (state.connectionDeleteConfirmOpen) {
+      if (key.name === "enter" || key.name === "return") {
+        deleteSelectedConnection();
       }
       return;
     }
@@ -1012,6 +1235,36 @@ export function App({
 
       if (key.name === "enter" || key.name === "return") {
         connectSelectedConnection();
+        return;
+      }
+
+      if (key.name === "a") {
+        dispatch({ type: "OPEN_CONNECTION_FORM", mode: { kind: "add" }, fields: { ...emptyFormFields } });
+        return;
+      }
+
+      if (key.name === "e") {
+        if (selectedConnection === null) return;
+        if (selectedConnection.source !== "config") {
+          dispatch({ type: "LOAD_FAILURE", error: "CLI connections cannot be edited." });
+          return;
+        }
+        dispatch({
+          type: "OPEN_CONNECTION_FORM",
+          mode: { kind: "edit", connectionId: selectedConnection.id },
+          fields: { name: selectedConnection.name, provider: selectedConnection.provider, url: selectedConnection.url },
+        });
+        return;
+      }
+
+      if (key.name === "d") {
+        if (selectedConnection === null) return;
+        if (selectedConnection.source !== "config") {
+          dispatch({ type: "LOAD_FAILURE", error: "CLI connections cannot be deleted." });
+          return;
+        }
+        dispatch({ type: "OPEN_CONNECTION_DELETE_CONFIRM" });
+        return;
       }
 
       return;
@@ -1122,12 +1375,30 @@ export function App({
       {state.screen === "main" ? <Header connection={selectedConnection} /> : null}
 
       {state.screen === "connections" ? (
-        <ConnectionSelect
-          configPath={connectionState.onboarding.configPath}
-          connections={connections}
-          selectedIndex={state.selectedConnectionIndex}
-          statuses={state.connectionStatuses}
-        />
+        <>
+          <ConnectionSelect
+            configPath={connectionState.onboarding.configPath}
+            connections={connections}
+            selectedIndex={state.selectedConnectionIndex}
+            statuses={state.connectionStatuses}
+          />
+          {state.connectionFormMode !== null ? (
+            <box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center">
+              <ConnectionForm
+                mode={state.connectionFormMode}
+                fields={state.connectionFormFields}
+                focusedField={state.connectionFormFocusedField}
+                cursors={state.connectionFormCursors}
+                error={state.connectionFormError}
+              />
+            </box>
+          ) : null}
+          {state.connectionDeleteConfirmOpen && selectedConnection !== null ? (
+            <box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center">
+              <ConnectionDeleteConfirm connectionName={selectedConnection.name} />
+            </box>
+          ) : null}
+        </>
       ) : (
         <MainView
           activeFilter={state.activeFilter}
@@ -1527,6 +1798,14 @@ const connectionHelpSections: HelpSection[] = [
     entries: [
       { action: "Move selection", key: "j / k" },
       { action: "Connect", key: "Enter" },
+    ],
+  },
+  {
+    title: "Manage",
+    entries: [
+      { action: "Add connection", key: "a" },
+      { action: "Edit connection", key: "e" },
+      { action: "Delete connection", key: "d" },
     ],
   },
   {

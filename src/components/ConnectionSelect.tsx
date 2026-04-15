@@ -55,7 +55,7 @@ function NoConnections({ configPath }: { configPath: string }) {
   return (
     <box flexDirection="column" gap={1}>
       <text fg={colors.text}>No connections configured.</text>
-      <text fg={colors.muted}>Add a connection at {configPath}:</text>
+      <text fg={colors.muted}>Press 'a' to add a connection, or edit {configPath}:</text>
       <text fg={colors.muted}>[connections.local-qdrant]</text>
       <text fg={colors.muted}>provider = "qdrant"</text>
       <text fg={colors.muted}>url = "http://localhost:6333"</text>

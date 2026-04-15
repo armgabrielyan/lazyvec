@@ -27,3 +27,5 @@ export interface ConnectionState {
   defaultConnectionId?: string;
   onboarding: ConnectionOnboarding;
 }
+
+export type ConnectionFormMode = { kind: "add" } | { kind: "edit"; connectionId: string };
