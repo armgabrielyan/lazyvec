@@ -45,3 +45,7 @@ export function formatMetadataValue(value: unknown): string {
 export function formatVectorPreview(vector: number[]): string {
   return vector.map((value) => value.toFixed(4)).join(", ");
 }
+
+export function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
