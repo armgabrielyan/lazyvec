@@ -13,6 +13,7 @@ export interface ConnectionProfile {
   name: string;
   provider: Provider;
   url: string;
+  apiKey?: string;
   description: string;
   source: ConnectionSource;
 }

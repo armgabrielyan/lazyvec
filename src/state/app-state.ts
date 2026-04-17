@@ -1,7 +1,7 @@
 import type { Collection, SearchResult, VectorPage, VectorRecord } from "../adapters/types";
 import { createAdapter as createDefaultAdapter } from "../adapters/registry";
 import type { BrowserData } from "../app-data/browser-data";
-import { connectionFormFieldKeys, type ConnectionFormFields } from "../components/ConnectionForm";
+import { connectionFormFieldKeys, fieldMaxLength, type ConnectionFormCursors, type ConnectionFormFields } from "../components/ConnectionForm";
 import { clamp } from "../format";
 import { defaultCollectionPanelWidth, resizeCollectionPanelWidth } from "../layout/collection-panel";
 import { inferTableSchema, type TableSchema } from "../layout/metadata-schema";
@@ -14,13 +14,28 @@ export const defaultPageSize = 50;
 export const searchLimit = 20;
 export const reachabilityPollIntervalMs = 5000;
 export const EMPTY_STRING_SET: ReadonlySet<string> = new Set<string>();
-export const emptyFormFields: ConnectionFormFields = { name: "", provider: "qdrant", url: "" };
+export const emptyFormFields: ConnectionFormFields = { name: "", provider: "qdrant", url: "", apiKey: "" };
+const emptyFormCursors: ConnectionFormCursors = [0, 0, 0, 0];
 
 export type TuiDimension = number | "auto" | `${number}%`;
 
 export interface TextEditResult {
   value: string;
   cursor: number;
+}
+
+const BRACKETED_PASTE_PATTERN = /\x1b\[20[01]~/g;
+
+function stripNonPrintable(sequence: string): string {
+  const withoutPasteMarkers = sequence.replace(BRACKETED_PASTE_PATTERN, "");
+  let out = "";
+  for (const char of withoutPasteMarkers) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code >= 0x20 && code !== 0x7f) {
+      out += char;
+    }
+  }
+  return out;
 }
 
 export function applyTextEditKey(
@@ -38,10 +53,50 @@ export function applyTextEditKey(
   if ((key.name === "backspace" || key.name === "delete") && cursor > 0) {
     return { value: value.slice(0, cursor - 1) + value.slice(cursor), cursor: cursor - 1 };
   }
-  if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
-    if (maxLength !== undefined && value.length >= maxLength) return null;
-    return { value: value.slice(0, cursor) + key.sequence + value.slice(cursor), cursor: cursor + 1 };
+  if (!key.sequence || key.ctrl || key.meta) {
+    return null;
   }
+  const insert = stripNonPrintable(key.sequence);
+  if (insert.length === 0) {
+    return null;
+  }
+  const remaining = maxLength === undefined ? insert : insert.slice(0, Math.max(0, maxLength - value.length));
+  if (remaining.length === 0) {
+    return null;
+  }
+  return {
+    value: value.slice(0, cursor) + remaining + value.slice(cursor),
+    cursor: cursor + remaining.length,
+  };
+}
+
+export function routePaste(state: AppState, text: string): AppAction | null {
+  if (state.connectionFormMode !== null) {
+    const fieldIndex = state.connectionFormFocusedField;
+    if (fieldIndex === 1) {
+      return null;
+    }
+    const fieldKey = connectionFormFieldKeys[fieldIndex];
+    if (fieldKey === undefined) {
+      return null;
+    }
+    const value = state.connectionFormFields[fieldKey];
+    const cursor = state.connectionFormCursors[fieldIndex] ?? 0;
+    const edit = applyTextEditKey({ sequence: text }, value, cursor, fieldMaxLength);
+    if (edit === null) {
+      return null;
+    }
+    return { type: "UPDATE_CONNECTION_FORM_FIELD", fieldIndex, value: edit.value, cursor: edit.cursor };
+  }
+
+  if (state.filterOpen) {
+    const edit = applyTextEditKey({ sequence: text }, state.filterInput, state.filterCursor);
+    if (edit === null) {
+      return null;
+    }
+    return { type: "UPDATE_FILTER_INPUT", value: edit.value, cursor: edit.cursor };
+  }
+
   return null;
 }
 
@@ -87,7 +142,7 @@ export interface AppState {
   connectionFormMode: ConnectionFormMode | null;
   connectionFormFields: ConnectionFormFields;
   connectionFormFocusedField: number;
-  connectionFormCursors: [number, number, number];
+  connectionFormCursors: ConnectionFormCursors;
   connectionFormError: string | null;
   connectionDeleteConfirmOpen: boolean;
 }
@@ -180,7 +235,7 @@ export function createInitialState(connections: ConnectionProfile[]): AppState {
     connectionFormMode: null,
     connectionFormFields: emptyFormFields,
     connectionFormFocusedField: 0,
-    connectionFormCursors: [0, 0, 0],
+    connectionFormCursors: [...emptyFormCursors],
     connectionFormError: null,
     connectionDeleteConfirmOpen: false,
   };
@@ -643,7 +698,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         connectionFormMode: action.mode,
         connectionFormFields: action.fields,
         connectionFormFocusedField: 0,
-        connectionFormCursors: [action.fields.name.length, 0, action.fields.url.length],
+        connectionFormCursors: [
+          action.fields.name.length,
+          0,
+          action.fields.url.length,
+          action.fields.apiKey.length,
+        ],
         connectionFormError: null,
       };
 
@@ -653,12 +713,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         connectionFormMode: null,
         connectionFormFields: emptyFormFields,
         connectionFormFocusedField: 0,
-        connectionFormCursors: [0, 0, 0],
+        connectionFormCursors: [...emptyFormCursors],
         connectionFormError: null,
       };
 
     case "UPDATE_CONNECTION_FORM_FIELD": {
-      const cursors = [...state.connectionFormCursors] as [number, number, number];
+      const cursors = [...state.connectionFormCursors] as ConnectionFormCursors;
       cursors[action.fieldIndex] = action.cursor;
 
       const fields = { ...state.connectionFormFields };
@@ -676,7 +736,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     }
 
     case "CYCLE_CONNECTION_FORM_FOCUS": {
-      const fieldCount = 3;
+      const fieldCount = connectionFormFieldKeys.length;
       const next = (state.connectionFormFocusedField + action.delta + fieldCount) % fieldCount;
       return {
         ...state,
@@ -697,7 +757,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         connectionFormMode: null,
         connectionFormFields: emptyFormFields,
         connectionFormFocusedField: 0,
-        connectionFormCursors: [0, 0, 0],
+        connectionFormCursors: [...emptyFormCursors],
         connectionFormError: null,
         status: "Connection saved.",
       };

@@ -1,4 +1,5 @@
 import { useRenderer } from "@opentui/react";
+import type { PasteEvent } from "@opentui/core";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { createAdapter as createDefaultAdapter } from "./adapters/registry";
 import type { VectorDBAdapter } from "./adapters/types";
@@ -21,7 +22,7 @@ import { clamp, toErrorMessage } from "./format";
 import { inspectorRecordForSelection } from "./layout/inspector";
 import { parseFilterInput } from "./filter/parse";
 import { shouldShowStatusBar } from "./layout/view-state";
-import { appReducer, createInitialState, defaultPageSize, reachabilityPollIntervalMs, searchLimit, type AppProps } from "./state/app-state";
+import { appReducer, createInitialState, defaultPageSize, reachabilityPollIntervalMs, routePaste, searchLimit, type AppProps } from "./state/app-state";
 import { useAppKeyboard } from "./use-app-keyboard";
 
 export { appReducer, createInitialState } from "./state/app-state";
@@ -35,6 +36,8 @@ export function App({
   const renderer = useRenderer();
   const adapterRef = useRef<VectorDBAdapter | null>(null);
   const [state, dispatch] = useReducer(appReducer, connectionState.connections, createInitialState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const connections = state.connections;
   const selectedConnection = connections[state.selectedConnectionIndex] ?? null;
@@ -71,6 +74,21 @@ export function App({
     const interval = setInterval(() => runReachabilityCheck(false), reachabilityPollIntervalMs);
     return () => clearInterval(interval);
   }, [state.screen, runReachabilityCheck, connections.length]);
+
+  useEffect(() => {
+    const decoder = new TextDecoder();
+    const handler = (event: PasteEvent) => {
+      const text = decoder.decode(event.bytes);
+      const action = routePaste(stateRef.current, text);
+      if (action !== null) {
+        dispatch(action);
+      }
+    };
+    renderer.keyInput.on("paste", handler);
+    return () => {
+      renderer.keyInput.off("paste", handler);
+    };
+  }, [renderer]);
 
   function connectSelectedConnection() {
     dispatch({ type: "CONNECT_REQUEST", connectionName: selectedConnection?.name ?? null });
@@ -314,7 +332,12 @@ export function App({
       return;
     }
 
-    const input = { name: fields.name, provider: fields.provider as "qdrant", url: fields.url };
+    const input = {
+      name: fields.name,
+      provider: fields.provider as "qdrant",
+      url: fields.url,
+      ...(fields.apiKey.length > 0 ? { apiKey: fields.apiKey } : {}),
+    };
     const cliConnections = connections.filter((c) => c.source === "cli");
 
     void (async () => {

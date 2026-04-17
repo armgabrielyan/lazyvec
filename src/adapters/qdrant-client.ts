@@ -61,9 +61,20 @@ export interface QdrantClientLike {
 
 export type QdrantClientFactory = (config: ConnectionProfile) => QdrantClientLike;
 
-export function createQdrantClient(config: ConnectionProfile): QdrantClientLike {
-  return new QdrantClient({
-    checkCompatibility: false,
+export interface QdrantClientOptions {
+  url: string;
+  apiKey?: string;
+  checkCompatibility: boolean;
+}
+
+export function buildQdrantClientOptions(config: ConnectionProfile): QdrantClientOptions {
+  return {
     url: config.url,
-  }) as unknown as QdrantClientLike;
+    ...(config.apiKey ? { apiKey: config.apiKey } : {}),
+    checkCompatibility: false,
+  };
+}
+
+export function createQdrantClient(config: ConnectionProfile): QdrantClientLike {
+  return new QdrantClient(buildQdrantClientOptions(config)) as unknown as QdrantClientLike;
 }

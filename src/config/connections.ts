@@ -98,12 +98,16 @@ function parseConfigConnection(
 ): ConnectionProfile {
   const provider = parseProvider(rawConnection.provider, `Connection "${name}"`);
   const url = expectString(rawConnection.url, `Connection "${name}" must include a url`);
+  const apiKey = rawConnection.api_key === undefined
+    ? undefined
+    : expectString(rawConnection.api_key, `Connection "${name}" api_key must be a non-empty string`);
 
   return {
     id: name,
     name,
     provider,
     url,
+    ...(apiKey === undefined ? {} : { apiKey }),
     description: `Configured in ${displayPath}`,
     source: "config",
   };

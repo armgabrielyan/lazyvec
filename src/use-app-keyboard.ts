@@ -206,7 +206,12 @@ export function useAppKeyboard({
         dispatch({
           type: "OPEN_CONNECTION_FORM",
           mode: { kind: "edit", connectionId: selectedConnection.id },
-          fields: { name: selectedConnection.name, provider: selectedConnection.provider, url: selectedConnection.url },
+          fields: {
+            name: selectedConnection.name,
+            provider: selectedConnection.provider,
+            url: selectedConnection.url,
+            apiKey: selectedConnection.apiKey ?? "",
+          },
         });
         return;
       }

@@ -71,6 +71,37 @@ describe("connection config", () => {
     ).toThrow('Connection "prod-pinecone" uses unsupported provider "pinecone"');
   });
 
+  test("parses api_key for Qdrant Cloud connections", () => {
+    const state = parseConfigText(`
+      [connections.cloud-qdrant]
+      provider = "qdrant"
+      url = "https://xyz.cloud.qdrant.io:6333"
+      api_key = "secret-key-123"
+    `);
+
+    expect(state.connections).toEqual([
+      {
+        id: "cloud-qdrant",
+        name: "cloud-qdrant",
+        provider: "qdrant",
+        url: "https://xyz.cloud.qdrant.io:6333",
+        apiKey: "secret-key-123",
+        description: "Configured in ~/.lazyvec/config.toml",
+        source: "config",
+      },
+    ]);
+  });
+
+  test("connections without api_key do not include apiKey", () => {
+    const state = parseConfigText(`
+      [connections.local-qdrant]
+      provider = "qdrant"
+      url = "http://localhost:6333"
+    `);
+
+    expect(state.connections[0]).not.toHaveProperty("apiKey");
+  });
+
   test("requires a url for Qdrant connections", () => {
     expect(() =>
       parseConfigText(`

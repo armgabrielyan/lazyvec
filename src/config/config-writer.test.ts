@@ -106,6 +106,33 @@ url = "http://existing:6333"
     expect(connections["new-one"]!.url).toBe("http://new:6333");
   });
 
+  test("persists api_key when provided", async () => {
+    const configPath = await setup("");
+
+    await addConnectionToConfig(
+      { name: "cloud", provider: "qdrant", url: "https://xyz.cloud.qdrant.io:6333", apiKey: "sk-123" },
+      configPath,
+    );
+
+    const config = await readTomlAsync(configPath);
+    const connections = config.connections as Record<string, Record<string, string>>;
+    expect(connections.cloud).toEqual({
+      provider: "qdrant",
+      url: "https://xyz.cloud.qdrant.io:6333",
+      api_key: "sk-123",
+    });
+  });
+
+  test("omits api_key when absent", async () => {
+    const configPath = await setup("");
+
+    await addConnectionToConfig({ name: "local", provider: "qdrant", url: "http://localhost:6333" }, configPath);
+
+    const config = await readTomlAsync(configPath);
+    const connections = config.connections as Record<string, Record<string, string>>;
+    expect(connections.local).not.toHaveProperty("api_key");
+  });
+
   test("rejects duplicate name", async () => {
     const configPath = await setup(`
 [connections.local]
@@ -162,6 +189,44 @@ url = "http://localhost:6333"
 
     const config = await readTomlAsync(configPath);
     expect(config.default).toBe("new-name");
+  });
+
+  test("updates api_key when provided", async () => {
+    const configPath = await setup(`
+[connections.cloud]
+provider = "qdrant"
+url = "https://xyz.cloud.qdrant.io:6333"
+api_key = "old-key"
+`);
+
+    await updateConnectionInConfig(
+      "cloud",
+      { name: "cloud", provider: "qdrant", url: "https://xyz.cloud.qdrant.io:6333", apiKey: "new-key" },
+      configPath,
+    );
+
+    const config = await readTomlAsync(configPath);
+    const connections = config.connections as Record<string, Record<string, string>>;
+    expect(connections.cloud!.api_key).toBe("new-key");
+  });
+
+  test("removes api_key when cleared", async () => {
+    const configPath = await setup(`
+[connections.cloud]
+provider = "qdrant"
+url = "https://xyz.cloud.qdrant.io:6333"
+api_key = "old-key"
+`);
+
+    await updateConnectionInConfig(
+      "cloud",
+      { name: "cloud", provider: "qdrant", url: "https://xyz.cloud.qdrant.io:6333" },
+      configPath,
+    );
+
+    const config = await readTomlAsync(configPath);
+    const connections = config.connections as Record<string, Record<string, string>>;
+    expect(connections.cloud).not.toHaveProperty("api_key");
   });
 
   test("rejects renaming to an existing name", async () => {

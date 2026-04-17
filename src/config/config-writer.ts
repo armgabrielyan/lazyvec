@@ -8,6 +8,7 @@ export interface ConnectionInput {
   name: string;
   provider: Provider;
   url: string;
+  apiKey?: string;
 }
 
 const CONNECTION_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -28,9 +29,23 @@ export function validateConnectionUrl(url: string): string | null {
   }
 }
 
+interface RawConnection {
+  provider: string;
+  url: string;
+  api_key?: string;
+}
+
 interface RawConfig {
   default?: string;
-  connections?: Record<string, { provider: string; url: string }>;
+  connections?: Record<string, RawConnection>;
+}
+
+function toRawConnection(input: ConnectionInput): RawConnection {
+  return {
+    provider: input.provider,
+    url: input.url,
+    ...(input.apiKey ? { api_key: input.apiKey } : {}),
+  };
 }
 
 async function readConfig(configPath: string): Promise<RawConfig> {
@@ -56,7 +71,7 @@ export async function addConnectionToConfig(
     throw new Error(`Connection "${input.name}" already exists`);
   }
 
-  config.connections[input.name] = { provider: input.provider, url: input.url };
+  config.connections[input.name] = toRawConnection(input);
   await writeConfig(configPath, config);
 }
 
@@ -82,7 +97,7 @@ export async function updateConnectionInConfig(
     }
   }
 
-  config.connections[input.name] = { provider: input.provider, url: input.url };
+  config.connections[input.name] = toRawConnection(input);
   await writeConfig(configPath, config);
 }
 

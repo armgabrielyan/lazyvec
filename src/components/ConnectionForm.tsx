@@ -1,33 +1,39 @@
 import { colors } from "../theme";
 import type { ConnectionFormMode } from "../types";
+import { visibleTextWindow } from "./text-input-window";
 
 export interface ConnectionFormFields {
   name: string;
   provider: string;
   url: string;
+  apiKey: string;
 }
+
+export type ConnectionFormCursors = [number, number, number, number];
 
 export interface ConnectionFormProps {
   mode: ConnectionFormMode;
   fields: ConnectionFormFields;
   focusedField: number;
-  cursors: [number, number, number];
+  cursors: ConnectionFormCursors;
   error: string | null;
 }
 
-export const connectionFormFieldKeys: (keyof ConnectionFormFields)[] = ["name", "provider", "url"];
+export const connectionFormFieldKeys: (keyof ConnectionFormFields)[] = ["name", "provider", "url", "apiKey"];
 
-const fieldLabels = ["Name:", "Provider:", "URL:"];
+const fieldLabels = ["Name:", "Provider:", "URL:", "API Key:"];
 const labelWidth = 10;
-const fieldWidth = 36;
-export const fieldMaxLength = fieldWidth - 1;
+const fieldWidth = 80;
+const formWidth = labelWidth + fieldWidth + 8;
+export const fieldMaxLength = 2048;
 
 function TextInputField({ value, cursor, focused }: { value: string; cursor: number; focused: boolean }) {
-  const before = value.slice(0, cursor);
-  const at = value[cursor] ?? " ";
-  const after = value.slice(cursor + 1);
+  const { visible, localCursor } = visibleTextWindow(value, cursor, fieldWidth - 1);
+  const before = visible.slice(0, localCursor);
+  const at = visible[localCursor] ?? " ";
+  const after = visible.slice(localCursor + 1);
   const borderColor = focused ? colors.accent : colors.border;
-  const padLength = Math.max(0, fieldWidth - value.length - 1);
+  const padLength = Math.max(0, fieldWidth - visible.length - 1);
   const padding = " ".repeat(padLength);
 
   return (
@@ -39,7 +45,7 @@ function TextInputField({ value, cursor, focused }: { value: string; cursor: num
           <text fg={colors.text} bg={colors.statusBg}>{after}{padding}</text>
         </>
       ) : (
-        <text fg={colors.text} bg={colors.statusBg}>{value}{" ".repeat(padLength + 1)}</text>
+        <text fg={colors.text} bg={colors.statusBg}>{visible}{" ".repeat(padLength + 1)}</text>
       )}
     </box>
   );
@@ -64,7 +70,7 @@ export function ConnectionForm({ mode, fields, focusedField, cursors, error }: C
       border
       borderColor={colors.accent}
       backgroundColor={colors.statusBg}
-      width={56}
+      width={formWidth}
       paddingX={2}
       paddingY={1}
       flexDirection="column"
@@ -82,7 +88,7 @@ export function ConnectionForm({ mode, fields, focusedField, cursors, error }: C
             <ReadOnlyField value={fields.provider} focused={focusedField === index} />
           ) : (
             <TextInputField
-              value={index === 0 ? fields.name : fields.url}
+              value={fields[connectionFormFieldKeys[index]!]}
               cursor={cursors[index] ?? 0}
               focused={focusedField === index}
             />
