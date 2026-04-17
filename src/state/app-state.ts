@@ -12,6 +12,7 @@ import type { ConnectionFormMode, ConnectionProfile, ConnectionState, Connection
 export const panelOrder: Panel[] = ["collections", "records", "inspector"];
 export const defaultPageSize = 50;
 export const searchLimit = 20;
+export const reachabilityPollIntervalMs = 5000;
 export const EMPTY_STRING_SET: ReadonlySet<string> = new Set<string>();
 export const emptyFormFields: ConnectionFormFields = { name: "", provider: "qdrant", url: "" };
 

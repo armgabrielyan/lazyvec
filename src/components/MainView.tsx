@@ -411,6 +411,7 @@ const connectionHelpSections: HelpSection[] = [
       { action: "Add connection", key: "a" },
       { action: "Edit connection", key: "e" },
       { action: "Delete connection", key: "d" },
+      { action: "Refresh status", key: "r" },
     ],
   },
   {

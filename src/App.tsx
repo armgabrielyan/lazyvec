@@ -1,5 +1,5 @@
 import { useRenderer } from "@opentui/react";
-import { useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import { createAdapter as createDefaultAdapter } from "./adapters/registry";
 import type { VectorDBAdapter } from "./adapters/types";
 import {
@@ -21,7 +21,7 @@ import { clamp, toErrorMessage } from "./format";
 import { inspectorRecordForSelection } from "./layout/inspector";
 import { parseFilterInput } from "./filter/parse";
 import { shouldShowStatusBar } from "./layout/view-state";
-import { appReducer, createInitialState, defaultPageSize, searchLimit, type AppProps } from "./state/app-state";
+import { appReducer, createInitialState, defaultPageSize, reachabilityPollIntervalMs, searchLimit, type AppProps } from "./state/app-state";
 import { useAppKeyboard } from "./use-app-keyboard";
 
 export { appReducer, createInitialState } from "./state/app-state";
@@ -47,22 +47,30 @@ export function App({
     adapterRef.current = null;
   }
 
+  const runReachabilityCheck = useCallback((markChecking: boolean) => {
+    for (const connection of connections) {
+      if (markChecking) {
+        dispatch({ type: "CONNECTION_STATUS_UPDATE", connectionId: connection.id, status: "checking" });
+      }
+      void checkConnectionReachable(connection).then((status) => {
+        dispatch({ type: "CONNECTION_STATUS_UPDATE", connectionId: connection.id, status });
+      });
+    }
+  }, [connections]);
+
+  const refreshConnectionStatuses = useCallback(() => {
+    runReachabilityCheck(true);
+  }, [runReachabilityCheck]);
+
   useEffect(() => {
     if (state.screen !== "connections" || connections.length === 0) {
       return;
     }
 
-    for (const connection of connections) {
-      if (state.connectionStatuses[connection.id] !== undefined) {
-        continue;
-      }
-
-      dispatch({ type: "CONNECTION_STATUS_UPDATE", connectionId: connection.id, status: "checking" });
-      void checkConnectionReachable(connection).then((status) => {
-        dispatch({ type: "CONNECTION_STATUS_UPDATE", connectionId: connection.id, status });
-      });
-    }
-  }, [state.screen, connections, state.connectionStatuses]);
+    runReachabilityCheck(true);
+    const interval = setInterval(() => runReachabilityCheck(false), reachabilityPollIntervalMs);
+    return () => clearInterval(interval);
+  }, [state.screen, runReachabilityCheck, connections.length]);
 
   function connectSelectedConnection() {
     dispatch({ type: "CONNECT_REQUEST", connectionName: selectedConnection?.name ?? null });
@@ -367,6 +375,7 @@ export function App({
     searchSimilar,
     inspectSelectedRecord,
     refreshCurrentCollection,
+    refreshConnectionStatuses,
     loadNextRecordPage,
     moveCollection,
   });

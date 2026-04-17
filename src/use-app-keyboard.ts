@@ -23,6 +23,7 @@ interface AppKeyboardDeps {
   searchSimilar: () => void;
   inspectSelectedRecord: () => void;
   refreshCurrentCollection: () => void;
+  refreshConnectionStatuses: () => void;
   loadNextRecordPage: () => void;
   moveCollection: (delta: number) => void;
 }
@@ -45,6 +46,7 @@ export function useAppKeyboard({
   searchSimilar,
   inspectSelectedRecord,
   refreshCurrentCollection,
+  refreshConnectionStatuses,
   loadNextRecordPage,
   moveCollection,
 }: AppKeyboardDeps): void {
@@ -216,6 +218,11 @@ export function useAppKeyboard({
           return;
         }
         dispatch({ type: "OPEN_CONNECTION_DELETE_CONFIRM" });
+        return;
+      }
+
+      if (key.name === "r") {
+        refreshConnectionStatuses();
         return;
       }
 
