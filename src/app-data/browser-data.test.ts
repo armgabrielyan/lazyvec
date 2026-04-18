@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { loadCollectionRecords, loadInitialBrowserData, loadNextCollectionRecords, loadRecordDetails, searchSimilarRecords } from "./browser-data";
+import { loadCollectionRecords, loadCollectionStats, loadInitialBrowserData, loadNextCollectionRecords, loadRecordDetails, searchSimilarRecords } from "./browser-data";
 import type { AdapterCapabilities, HealthStatus, ListOptions, VectorDBAdapter } from "../adapters/types";
 
 const capabilities: AdapterCapabilities = {
@@ -13,6 +13,7 @@ const capabilities: AdapterCapabilities = {
   searchByVector: false,
   searchByText: false,
   deleteRecords: false,
+  getCollectionStats: true,
 };
 
 class FakeAdapter implements VectorDBAdapter {
@@ -91,6 +92,15 @@ class FakeAdapter implements VectorDBAdapter {
   async deleteRecords(_collection: string, ids: string[]) {
     this.calls.push("deleteRecords");
     return { deleted: ids.length };
+  }
+
+  async getCollectionStats(collection: string) {
+    this.calls.push(`getCollectionStats:${collection}`);
+    return {
+      status: "ready" as const,
+      counts: { points: 1240 },
+      vectorConfig: { dimensions: 1536, metric: "cosine" as const },
+    };
   }
 }
 
@@ -174,6 +184,17 @@ describe("browser data loading", () => {
       { record: { id: "similar-2", metadata: { source: "blog" }, vector: null }, score: 0.82 },
     ]);
     expect(adapter.calls).toContain("searchByVector");
+  });
+
+  test("loads collection stats through the adapter", async () => {
+    const adapter = new FakeAdapter();
+
+    await expect(loadCollectionStats(adapter, "rag_chunks")).resolves.toEqual({
+      status: "ready",
+      counts: { points: 1240 },
+      vectorConfig: { dimensions: 1536, metric: "cosine" },
+    });
+    expect(adapter.calls).toContain("getCollectionStats:rag_chunks");
   });
 
   test("loads record details for the inspector", async () => {

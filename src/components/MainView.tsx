@@ -2,7 +2,7 @@ import { SyntaxStyle } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
 import { useMemo } from "react";
 import type { ReactNode } from "react";
-import type { Collection, SearchResult, VectorRecord } from "../adapters/types";
+import type { Collection, CollectionStats, SearchResult, VectorRecord } from "../adapters/types";
 import { pad } from "../format";
 import { defaultCollectionPanelWidth, formatCollectionPanelRow } from "../layout/collection-panel";
 import { formatInspectorVectorPreview } from "../layout/inspector";
@@ -18,8 +18,9 @@ import {
 } from "../layout/view-state";
 import type { TuiDimension } from "../state/app-state";
 import { colors } from "../theme";
-import type { ConnectionProfile, Panel, Screen } from "../types";
+import type { ConnectionProfile, Panel, RightTab, Screen } from "../types";
 import type { FilterCondition } from "../filter/parse";
+import { CollectionStatsPanel, RightTabBar } from "./CollectionStatsPanel";
 
 // --- Header ---
 
@@ -66,9 +67,11 @@ function HeaderField({ label, value, valueColor }: HeaderFieldProps) {
 
 export interface MainViewProps {
   activeFilter: FilterCondition[];
+  activeRightTab: RightTab;
   collectionDimensions: number;
   collectionPanelWidth: number;
   collections: Collection[];
+  collectionStats: CollectionStats | null;
   deleteConfirmOpen: boolean;
   filterCursor: number;
   filterInput: string;
@@ -80,17 +83,22 @@ export interface MainViewProps {
   searchResults: SearchResult[] | null;
   searchSourceId: string | null;
   selectedCollectionIndex: number;
+  selectedCollectionName: string | null;
   selectedRecordIds: Set<string>;
   selectedRecordIndex: number;
+  statsError: string | null;
+  statsLoading: boolean;
   statusBarVisible: boolean;
   tableSchema: TableSchema;
 }
 
 export function MainView({
   activeFilter,
+  activeRightTab,
   collectionDimensions,
   collectionPanelWidth,
   collections,
+  collectionStats,
   deleteConfirmOpen,
   filterCursor,
   filterInput,
@@ -102,8 +110,11 @@ export function MainView({
   searchResults,
   searchSourceId,
   selectedCollectionIndex,
+  selectedCollectionName,
   selectedRecordIds,
   selectedRecordIndex,
+  statsError,
+  statsLoading,
   statusBarVisible,
   tableSchema,
 }: MainViewProps) {
@@ -113,9 +124,11 @@ export function MainView({
   const footerHeight = 1;
   const filterBarHeight = filterOpen ? 3 : 0;
   const statusBarHeight = statusBarVisible ? 3 : 0;
+  const tabBarHeight = 1;
   const availableHeight = Math.max(10, height - headerHeight - footerHeight - filterBarHeight - statusBarHeight);
   const inspectorHeight = Math.max(5, Math.floor(availableHeight * 0.35));
-  const recordsHeight = availableHeight - inspectorHeight;
+  const rightTopHeight = availableHeight - inspectorHeight - tabBarHeight;
+  const rightFocused = focusedPanel === "records" || focusedPanel === "stats";
 
   return (
     <box height={availableHeight + filterBarHeight} flexDirection="column">
@@ -129,19 +142,31 @@ export function MainView({
           selectedIndex={selectedCollectionIndex}
         />
         <box flexGrow={1} flexDirection="column">
-          <RecordTable
-            activeFilter={activeFilter}
-            contentWidth={recordContentWidth}
-            focused={focusedPanel === "records"}
-            height={recordsHeight}
-            loading={loading}
-            records={records}
-            schema={tableSchema}
-            searchResults={searchResults}
-            searchSourceId={searchSourceId}
-            selectedIndex={selectedRecordIndex}
-            selectedRecordIds={selectedRecordIds}
-          />
+          <RightTabBar activeTab={activeRightTab} focused={rightFocused} recordCount={records.length} />
+          {activeRightTab === "records" ? (
+            <RecordTable
+              activeFilter={activeFilter}
+              contentWidth={recordContentWidth}
+              focused={focusedPanel === "records"}
+              height={rightTopHeight}
+              loading={loading}
+              records={records}
+              schema={tableSchema}
+              searchResults={searchResults}
+              searchSourceId={searchSourceId}
+              selectedIndex={selectedRecordIndex}
+              selectedRecordIds={selectedRecordIds}
+            />
+          ) : (
+            <CollectionStatsPanel
+              collectionName={selectedCollectionName}
+              error={statsError}
+              focused={focusedPanel === "stats"}
+              height={rightTopHeight}
+              loading={statsLoading}
+              stats={collectionStats}
+            />
+          )}
           <Inspector
             collectionDimensions={collectionDimensions}
             focused={focusedPanel === "inspector"}
@@ -443,7 +468,8 @@ const mainHelpSections: HelpSection[] = [
       { action: "Yank (copy) vector", key: "y v" },
       { action: "Delete record(s)", key: "d" },
       { action: "Visual select", key: "V" },
-      { action: "Refresh collection", key: "r" },
+      { action: "Refresh", key: "r" },
+      { action: "Toggle Records/Stats tab", key: "t" },
       { action: "Back to connections", key: "Esc / c" },
     ],
   },

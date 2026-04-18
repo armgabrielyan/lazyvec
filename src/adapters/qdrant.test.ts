@@ -52,6 +52,7 @@ function createClient(overrides: Partial<QdrantClientLike> = {}): QdrantClientLi
     ],
     search: async () => [],
     delete: async () => ({ status: "completed" }),
+    getCollectionAliases: async () => ({ aliases: [] }),
     ...overrides,
   };
 }
@@ -69,6 +70,7 @@ describe("QdrantAdapter", () => {
       searchByVector: true,
       searchByText: false,
       deleteRecords: true,
+      getCollectionStats: true,
     });
   });
 
@@ -275,6 +277,146 @@ describe("QdrantAdapter", () => {
     await expect(adapter.getRecord("rag_chunks", "missing")).rejects.toThrow(
       'Record "missing" was not found in collection "rag_chunks"',
     );
+  });
+
+  test("builds collection stats from getCollection plus aliases", async () => {
+    const adapter = new QdrantAdapter({
+      client: createClient({
+        getCollection: async () => ({
+          status: "green",
+          optimizer_status: "ok",
+          points_count: 18820,
+          indexed_vectors_count: 18828,
+          segments_count: 2,
+          config: {
+            params: {
+              vectors: { size: 384, distance: "Cosine", on_disk: false },
+              shard_number: 1,
+              replication_factor: 2,
+              write_consistency_factor: 1,
+              on_disk_payload: true,
+            },
+            hnsw_config: {
+              m: 16,
+              ef_construct: 100,
+              full_scan_threshold: 10000,
+              on_disk: false,
+            },
+            quantization_config: {
+              scalar: { type: "int8", quantile: 0.99, always_ram: true },
+            },
+          },
+          payload_schema: {
+            text: {
+              data_type: "text",
+              points: 18725,
+              params: { tokenizer: "prefix" },
+            },
+            sections: {
+              data_type: "keyword",
+              points: 18820,
+            },
+          },
+        }),
+        getCollectionAliases: async () => ({
+          aliases: [
+            { alias_name: "current", collection_name: "rag_chunks" },
+            { alias_name: "live", collection_name: "rag_chunks" },
+          ],
+        }),
+      }),
+    });
+
+    await adapter.connect(localConnection);
+
+    await expect(adapter.getCollectionStats("rag_chunks")).resolves.toEqual({
+      status: "ready",
+      optimizerStatus: { ok: true },
+      counts: { points: 18820, indexedVectors: 18828, segments: 2 },
+      vectorConfig: { dimensions: 384, metric: "cosine", onDisk: false },
+      indexConfig: {
+        kind: "hnsw",
+        m: 16,
+        efConstruct: 100,
+        fullScanThreshold: 10000,
+        onDisk: false,
+      },
+      quantization: {
+        kind: "scalar",
+        details: { type: "int8", quantile: 0.99, always_ram: true },
+      },
+      sharding: {
+        shardNumber: 1,
+        replicationFactor: 2,
+        writeConsistencyFactor: 1,
+      },
+      payloadIndexes: [
+        { field: "text", dataType: "text", indexedPoints: 18725 },
+        { field: "sections", dataType: "keyword", indexedPoints: 18820 },
+      ],
+      aliases: ["current", "live"],
+    });
+  });
+
+  test("surfaces optimizer warnings as messages", async () => {
+    const adapter = new QdrantAdapter({
+      client: createClient({
+        getCollection: async () => ({
+          status: "yellow",
+          optimizer_status: { error: "segment overflow" },
+          points_count: 10,
+          config: {
+            params: { vectors: { size: 4, distance: "Cosine" } },
+          },
+        }),
+      }),
+    });
+
+    await adapter.connect(localConnection);
+
+    const stats = await adapter.getCollectionStats("rag_chunks");
+    expect(stats.status).toBe("initializing");
+    expect(stats.optimizerStatus).toEqual({ ok: false, message: "segment overflow" });
+  });
+
+  test("gracefully handles a sparse getCollection response", async () => {
+    const adapter = new QdrantAdapter({
+      client: createClient({
+        getCollection: async () => ({
+          status: "green",
+          points_count: 0,
+          config: {
+            params: { vectors: { size: 8, distance: "Euclid" } },
+          },
+        }),
+        getCollectionAliases: async () => ({ aliases: [] }),
+      }),
+    });
+
+    await adapter.connect(localConnection);
+
+    await expect(adapter.getCollectionStats("rag_chunks")).resolves.toEqual({
+      status: "ready",
+      counts: { points: 0 },
+      vectorConfig: { dimensions: 8, metric: "euclidean" },
+      aliases: [],
+    });
+  });
+
+  test("continues when the aliases endpoint fails", async () => {
+    const adapter = new QdrantAdapter({
+      client: createClient({
+        getCollectionAliases: async () => {
+          throw new Error("403 forbidden");
+        },
+      }),
+    });
+
+    await adapter.connect(localConnection);
+
+    const stats = await adapter.getCollectionStats("rag_chunks");
+    expect(stats.aliases).toBeUndefined();
+    expect(stats.counts.points).toBe(1240);
   });
 
   test("deletes records by ID", async () => {

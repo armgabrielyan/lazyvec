@@ -1,4 +1,4 @@
-import type { Collection, HealthStatus, SearchResult, VectorDBAdapter, VectorPage, VectorRecord } from "../adapters/types";
+import type { Collection, CollectionStats, HealthStatus, SearchResult, VectorDBAdapter, VectorPage, VectorRecord } from "../adapters/types";
 import type { FilterCondition } from "../filter/parse";
 
 export interface BrowserDataOptions {
@@ -89,4 +89,11 @@ export function loadRecordDetails(
   recordId: string,
 ): Promise<VectorRecord> {
   return adapter.getRecord(collectionName, recordId);
+}
+
+export function loadCollectionStats(
+  adapter: VectorDBAdapter,
+  collectionName: string,
+): Promise<CollectionStats> {
+  return adapter.getCollectionStats(collectionName);
 }

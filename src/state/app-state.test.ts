@@ -15,6 +15,111 @@ function formOpenedState(fields = emptyFormFields): AppState {
   return appReducer(base, { type: "OPEN_CONNECTION_FORM", mode: { kind: "add" }, fields });
 }
 
+describe("collection stats reducer", () => {
+  test("initial state defaults to the records tab with empty stats cache", () => {
+    const state = createInitialState([]);
+    expect(state.activeRightTab).toBe("records");
+    expect(state.collectionStats).toEqual({});
+    expect(state.statsLoading).toBe(false);
+    expect(state.statsError).toBeNull();
+  });
+
+  test("SET_RIGHT_TAB switches tabs without altering stats", () => {
+    const state = createInitialState([]);
+    const onStats = appReducer(state, { type: "SET_RIGHT_TAB", tab: "stats" });
+    expect(onStats.activeRightTab).toBe("stats");
+    const backToRecords = appReducer(onStats, { type: "SET_RIGHT_TAB", tab: "records" });
+    expect(backToRecords.activeRightTab).toBe("records");
+  });
+
+  test("STATS_LOAD lifecycle caches result per collection", () => {
+    const base = createInitialState([]);
+    const loading = appReducer(base, { type: "STATS_LOAD_START" });
+    expect(loading.statsLoading).toBe(true);
+    expect(loading.statsError).toBeNull();
+
+    const success = appReducer(loading, {
+      type: "STATS_LOAD_SUCCESS",
+      collectionName: "rag_chunks",
+      stats: {
+        status: "ready",
+        counts: { points: 10 },
+        vectorConfig: { dimensions: 4, metric: "cosine" },
+      },
+    });
+
+    expect(success.statsLoading).toBe(false);
+    expect(success.collectionStats["rag_chunks"]).toBeDefined();
+    expect(success.collectionStats["rag_chunks"]?.counts.points).toBe(10);
+  });
+
+  test("STATS_LOAD_FAILURE records the error without wiping cache", () => {
+    const base = appReducer(createInitialState([]), {
+      type: "STATS_LOAD_SUCCESS",
+      collectionName: "rag_chunks",
+      stats: {
+        status: "ready",
+        counts: { points: 10 },
+        vectorConfig: { dimensions: 4, metric: "cosine" },
+      },
+    });
+    const failed = appReducer(base, { type: "STATS_LOAD_FAILURE", error: "boom" });
+    expect(failed.statsLoading).toBe(false);
+    expect(failed.statsError).toBe("boom");
+    expect(failed.collectionStats["rag_chunks"]).toBeDefined();
+  });
+
+  test("SET_RIGHT_TAB to stats moves focus from records to stats", () => {
+    const base: AppState = { ...createInitialState([]), focusedPanel: "records" };
+    const toStats = appReducer(base, { type: "SET_RIGHT_TAB", tab: "stats" });
+    expect(toStats.focusedPanel).toBe("stats");
+    const backToRecords = appReducer(toStats, { type: "SET_RIGHT_TAB", tab: "records" });
+    expect(backToRecords.focusedPanel).toBe("records");
+  });
+
+  test("SET_RIGHT_TAB leaves focus unchanged when on another panel", () => {
+    const base: AppState = { ...createInitialState([]), focusedPanel: "inspector" };
+    const toStats = appReducer(base, { type: "SET_RIGHT_TAB", tab: "stats" });
+    expect(toStats.focusedPanel).toBe("inspector");
+  });
+
+  test("CYCLE_FOCUS includes stats panel when stats tab is active", () => {
+    const base: AppState = { ...createInitialState([]), activeRightTab: "stats", focusedPanel: "collections" };
+    const afterOne = appReducer(base, { type: "CYCLE_FOCUS", delta: 1 });
+    expect(afterOne.focusedPanel).toBe("stats");
+    const afterTwo = appReducer(afterOne, { type: "CYCLE_FOCUS", delta: 1 });
+    expect(afterTwo.focusedPanel).toBe("inspector");
+    const afterThree = appReducer(afterTwo, { type: "CYCLE_FOCUS", delta: 1 });
+    expect(afterThree.focusedPanel).toBe("collections");
+  });
+
+  test("INVALIDATE_STATS removes cached entries for the named collections", () => {
+    const seeded: AppState = {
+      ...createInitialState([]),
+      collectionStats: {
+        rag_chunks: {
+          status: "ready",
+          counts: { points: 10 },
+          vectorConfig: { dimensions: 4, metric: "cosine" },
+        },
+        products: {
+          status: "ready",
+          counts: { points: 5 },
+          vectorConfig: { dimensions: 4, metric: "cosine" },
+        },
+      },
+    };
+
+    const invalidated = appReducer(seeded, {
+      type: "INVALIDATE_STATS",
+      collectionNames: ["rag_chunks"],
+    });
+
+    expect(invalidated.collectionStats["rag_chunks"]).toBeUndefined();
+    expect(invalidated.collectionStats["products"]).toBeDefined();
+  });
+});
+
 describe("connection form reducer", () => {
   test("form field keys include apiKey after url", () => {
     expect(connectionFormFieldKeys).toEqual(["name", "provider", "url", "apiKey"]);

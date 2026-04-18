@@ -14,7 +14,10 @@ export interface AdapterCapabilities {
   searchByVector: boolean;
   searchByText: boolean;
   deleteRecords: boolean;
+  getCollectionStats: boolean;
 }
+
+export type CollectionStatus = "ready" | "initializing" | "error" | "degraded";
 
 export interface Collection {
   name: string;
@@ -25,7 +28,7 @@ export interface Collection {
 }
 
 export interface CollectionDetails extends Collection {
-  status: "ready" | "initializing" | "error";
+  status: CollectionStatus;
   config: Record<string, unknown>;
 }
 
@@ -63,6 +66,73 @@ export interface HealthStatus {
   provider: Provider;
 }
 
+export interface CollectionStatsCounts {
+  points: number;
+  indexedVectors?: number;
+  segments?: number;
+}
+
+export interface CollectionStatsVectorConfig {
+  dimensions: number;
+  metric: VectorMetric;
+  onDisk?: boolean;
+}
+
+export interface HnswIndexConfig {
+  kind: "hnsw";
+  m?: number;
+  efConstruct?: number;
+  fullScanThreshold?: number;
+  onDisk?: boolean;
+}
+
+export interface OtherIndexConfig {
+  kind: "other";
+  details: Record<string, unknown>;
+}
+
+export type CollectionIndexConfig = HnswIndexConfig | OtherIndexConfig;
+
+export interface CollectionQuantization {
+  kind: string;
+  details: Record<string, unknown>;
+}
+
+export interface CollectionSharding {
+  shardNumber: number;
+  replicationFactor: number;
+  writeConsistencyFactor?: number;
+}
+
+export interface PayloadIndex {
+  field: string;
+  dataType: string;
+  indexedPoints?: number;
+}
+
+export interface NamespaceStats {
+  name: string;
+  count: number;
+}
+
+export interface OptimizerStatus {
+  ok: boolean;
+  message?: string;
+}
+
+export interface CollectionStats {
+  status: CollectionStatus;
+  optimizerStatus?: OptimizerStatus;
+  counts: CollectionStatsCounts;
+  vectorConfig: CollectionStatsVectorConfig;
+  indexConfig?: CollectionIndexConfig;
+  quantization?: CollectionQuantization;
+  sharding?: CollectionSharding;
+  payloadIndexes?: PayloadIndex[];
+  aliases?: string[];
+  namespaces?: NamespaceStats[];
+}
+
 export interface VectorDBAdapter {
   readonly provider: Provider;
   readonly capabilities: AdapterCapabilities;
@@ -76,4 +146,5 @@ export interface VectorDBAdapter {
   getRecord(collection: string, id: string): Promise<VectorRecord>;
   searchByVector(collection: string, opts: SearchOptions): Promise<SearchResult[]>;
   deleteRecords(collection: string, ids: string[]): Promise<{ deleted: number }>;
+  getCollectionStats(collection: string): Promise<CollectionStats>;
 }

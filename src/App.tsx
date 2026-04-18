@@ -6,6 +6,7 @@ import type { VectorDBAdapter } from "./adapters/types";
 import {
   deleteRecords,
   loadCollectionRecords,
+  loadCollectionStats,
   loadInitialBrowserData,
   loadNextCollectionRecords,
   loadRecordDetails,
@@ -74,6 +75,22 @@ export function App({
     const interval = setInterval(() => runReachabilityCheck(false), reachabilityPollIntervalMs);
     return () => clearInterval(interval);
   }, [state.screen, runReachabilityCheck, connections.length]);
+
+  useEffect(() => {
+    if (
+      state.screen !== "main" ||
+      state.activeRightTab !== "stats" ||
+      selectedCollection === null ||
+      state.statsLoading
+    ) {
+      return;
+    }
+    if (state.collectionStats[selectedCollection.name] !== undefined) {
+      return;
+    }
+    fetchCollectionStats(selectedCollection.name);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.activeRightTab, selectedCollection?.name, state.screen]);
 
   useEffect(() => {
     const decoder = new TextDecoder();
@@ -164,6 +181,29 @@ export function App({
 
   function refreshCurrentCollection() {
     selectCollectionByIndex(state.selectedCollectionIndex);
+  }
+
+  function fetchCollectionStats(collectionName: string) {
+    const adapter = adapterRef.current;
+    if (adapter === null) {
+      return;
+    }
+
+    dispatch({ type: "STATS_LOAD_START" });
+    void (async () => {
+      try {
+        const stats = await loadCollectionStats(adapter, collectionName);
+        dispatch({ type: "STATS_LOAD_SUCCESS", collectionName, stats });
+      } catch (error) {
+        dispatch({ type: "STATS_LOAD_FAILURE", error: toErrorMessage(error) });
+      }
+    })();
+  }
+
+  function refreshCollectionStats() {
+    if (selectedCollection === null) return;
+    dispatch({ type: "INVALIDATE_STATS", collectionNames: [selectedCollection.name] });
+    fetchCollectionStats(selectedCollection.name);
   }
 
   function loadNextRecordPage() {
@@ -398,6 +438,7 @@ export function App({
     searchSimilar,
     inspectSelectedRecord,
     refreshCurrentCollection,
+    refreshCollectionStats,
     refreshConnectionStatuses,
     loadNextRecordPage,
     moveCollection,
@@ -435,9 +476,11 @@ export function App({
       ) : (
         <MainView
           activeFilter={state.activeFilter}
+          activeRightTab={state.activeRightTab}
           collectionDimensions={selectedCollection?.dimensions ?? 0}
           collectionPanelWidth={state.collectionPanelWidth}
           collections={state.collections}
+          collectionStats={selectedCollection === null ? null : state.collectionStats[selectedCollection.name] ?? null}
           deleteConfirmOpen={state.deleteConfirmOpen}
           filterCursor={state.filterCursor}
           filterInput={state.filterInput}
@@ -447,10 +490,13 @@ export function App({
           loading={state.loading}
           records={state.records}
           selectedCollectionIndex={state.selectedCollectionIndex}
+          selectedCollectionName={selectedCollection?.name ?? null}
           searchResults={state.searchResults}
           searchSourceId={state.searchSourceId}
           selectedRecordIds={state.selectedRecordIds}
           selectedRecordIndex={state.selectedRecordIndex}
+          statsError={state.statsError}
+          statsLoading={state.statsLoading}
           statusBarVisible={shouldShowStatusBar({ error: state.error, status: state.status })}
           tableSchema={state.tableSchema}
         />

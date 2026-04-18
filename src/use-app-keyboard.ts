@@ -23,6 +23,7 @@ interface AppKeyboardDeps {
   searchSimilar: () => void;
   inspectSelectedRecord: () => void;
   refreshCurrentCollection: () => void;
+  refreshCollectionStats: () => void;
   refreshConnectionStatuses: () => void;
   loadNextRecordPage: () => void;
   moveCollection: (delta: number) => void;
@@ -46,6 +47,7 @@ export function useAppKeyboard({
   searchSimilar,
   inspectSelectedRecord,
   refreshCurrentCollection,
+  refreshCollectionStats,
   refreshConnectionStatuses,
   loadNextRecordPage,
   moveCollection,
@@ -264,8 +266,17 @@ export function useAppKeyboard({
       return;
     }
 
+    if (key.name === "t") {
+      dispatch({ type: "SET_RIGHT_TAB", tab: state.activeRightTab === "stats" ? "records" : "stats" });
+      return;
+    }
+
     if (key.name === "r") {
-      refreshCurrentCollection();
+      if (state.activeRightTab === "stats") {
+        refreshCollectionStats();
+      } else {
+        refreshCurrentCollection();
+      }
       return;
     }
 

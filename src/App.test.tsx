@@ -61,6 +61,7 @@ const adapterCapabilities = {
   searchByVector: false,
   searchByText: false,
   deleteRecords: false,
+  getCollectionStats: true,
 };
 
 function createFakeAdapter(): VectorDBAdapter {
@@ -118,6 +119,13 @@ function createFakeAdapter(): VectorDBAdapter {
     },
     async deleteRecords(_collection: string, ids: string[]) {
       return { deleted: ids.length };
+    },
+    async getCollectionStats() {
+      return {
+        status: "ready",
+        counts: { points: 100 },
+        vectorConfig: { dimensions: 512, metric: "cosine" },
+      };
     },
   };
 }

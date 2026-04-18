@@ -14,6 +14,7 @@ const capabilities: AdapterCapabilities = {
   searchByVector: false,
   searchByText: false,
   deleteRecords: false,
+  getCollectionStats: true,
 };
 
 class FakeAdapter implements VectorDBAdapter {
@@ -61,6 +62,14 @@ class FakeAdapter implements VectorDBAdapter {
 
   async deleteRecords(_collection: string, ids: string[]) {
     return { deleted: ids.length };
+  }
+
+  async getCollectionStats() {
+    return {
+      status: "ready" as const,
+      counts: { points: 0 },
+      vectorConfig: { dimensions: 0, metric: "unknown" as const },
+    };
   }
 }
 

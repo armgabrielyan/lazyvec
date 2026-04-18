@@ -1,4 +1,4 @@
-import type { Collection, SearchResult, VectorPage, VectorRecord } from "../adapters/types";
+import type { Collection, CollectionStats, SearchResult, VectorPage, VectorRecord } from "../adapters/types";
 import { createAdapter as createDefaultAdapter } from "../adapters/registry";
 import type { BrowserData } from "../app-data/browser-data";
 import { connectionFormFieldKeys, fieldMaxLength, type ConnectionFormCursors, type ConnectionFormFields } from "../components/ConnectionForm";
@@ -7,9 +7,13 @@ import { defaultCollectionPanelWidth, resizeCollectionPanelWidth } from "../layo
 import { inferTableSchema, type TableSchema } from "../layout/metadata-schema";
 import type { FilterCondition } from "../filter/parse";
 import { formatFilterSummary } from "../filter/parse";
-import type { ConnectionFormMode, ConnectionProfile, ConnectionState, ConnectionStatus, Panel, Screen } from "../types";
+import type { ConnectionFormMode, ConnectionProfile, ConnectionState, ConnectionStatus, Panel, RightTab, Screen } from "../types";
 
 export const panelOrder: Panel[] = ["collections", "records", "inspector"];
+
+export function panelOrderForTab(tab: RightTab): Panel[] {
+  return ["collections", tab === "stats" ? "stats" : "records", "inspector"];
+}
 export const defaultPageSize = 50;
 export const searchLimit = 20;
 export const reachabilityPollIntervalMs = 5000;
@@ -118,6 +122,10 @@ export interface AppState {
   selectedCollectionIndex: number;
   selectedRecordIndex: number;
   focusedPanel: Panel;
+  activeRightTab: RightTab;
+  collectionStats: Record<string, CollectionStats>;
+  statsLoading: boolean;
+  statsError: string | null;
   showHelp: boolean;
   status: string;
   loading: boolean;
@@ -195,7 +203,12 @@ export type AppAction =
   | { type: "SAVE_CONNECTION_SUCCESS"; connections: ConnectionProfile[] }
   | { type: "OPEN_CONNECTION_DELETE_CONFIRM" }
   | { type: "CLOSE_CONNECTION_DELETE_CONFIRM" }
-  | { type: "DELETE_CONNECTION_SUCCESS"; connections: ConnectionProfile[]; deletedIndex: number };
+  | { type: "DELETE_CONNECTION_SUCCESS"; connections: ConnectionProfile[]; deletedIndex: number }
+  | { type: "SET_RIGHT_TAB"; tab: RightTab }
+  | { type: "STATS_LOAD_START" }
+  | { type: "STATS_LOAD_SUCCESS"; collectionName: string; stats: CollectionStats }
+  | { type: "STATS_LOAD_FAILURE"; error: string }
+  | { type: "INVALIDATE_STATS"; collectionNames: string[] };
 
 export interface AppProps {
   connectionState: ConnectionState;
@@ -212,6 +225,10 @@ export function createInitialState(connections: ConnectionProfile[]): AppState {
     selectedCollectionIndex: 0,
     selectedRecordIndex: 0,
     focusedPanel: "collections",
+    activeRightTab: "records",
+    collectionStats: {},
+    statsLoading: false,
+    statsError: null,
     showHelp: false,
     status: "",
     loading: false,
@@ -319,9 +336,10 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
 
     case "CYCLE_FOCUS": {
-      const currentIndex = panelOrder.indexOf(state.focusedPanel);
-      const nextIndex = (currentIndex + action.delta + panelOrder.length) % panelOrder.length;
-      const focusedPanel = panelOrder[nextIndex] ?? "collections";
+      const order = panelOrderForTab(state.activeRightTab);
+      const currentIndex = Math.max(0, order.indexOf(state.focusedPanel));
+      const nextIndex = (currentIndex + action.delta + order.length) % order.length;
+      const focusedPanel = order[nextIndex] ?? "collections";
 
       return {
         ...state,
@@ -785,6 +803,58 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         connectionDeleteConfirmOpen: false,
         selectedConnectionIndex: newIndex,
         status: "Connection deleted.",
+      };
+    }
+
+    case "SET_RIGHT_TAB": {
+      const currentRightPanel = action.tab === "stats" ? "stats" : "records";
+      const previousRightPanel = action.tab === "stats" ? "records" : "stats";
+      const focusedPanel = state.focusedPanel === previousRightPanel ? currentRightPanel : state.focusedPanel;
+
+      return {
+        ...state,
+        activeRightTab: action.tab,
+        focusedPanel,
+        statsError: action.tab === "records" ? null : state.statsError,
+      };
+    }
+
+    case "STATS_LOAD_START":
+      return {
+        ...state,
+        statsLoading: true,
+        statsError: null,
+      };
+
+    case "STATS_LOAD_SUCCESS":
+      return {
+        ...state,
+        statsLoading: false,
+        statsError: null,
+        collectionStats: {
+          ...state.collectionStats,
+          [action.collectionName]: action.stats,
+        },
+      };
+
+    case "STATS_LOAD_FAILURE":
+      return {
+        ...state,
+        statsLoading: false,
+        statsError: action.error,
+      };
+
+    case "INVALIDATE_STATS": {
+      if (action.collectionNames.length === 0) {
+        return state;
+      }
+      const next = { ...state.collectionStats };
+      for (const name of action.collectionNames) {
+        delete next[name];
+      }
+      return {
+        ...state,
+        collectionStats: next,
       };
     }
   }

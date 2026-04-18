@@ -11,9 +11,17 @@ export interface QdrantPoint {
 
 export interface QdrantCollectionInfo {
   status?: unknown;
+  optimizer_status?: unknown;
   points_count?: unknown;
   vectors_count?: unknown;
+  indexed_vectors_count?: unknown;
+  segments_count?: unknown;
   config?: unknown;
+  payload_schema?: unknown;
+}
+
+export interface QdrantCollectionAliases {
+  aliases: Array<{ alias_name?: unknown; collection_name?: unknown }>;
 }
 
 export interface QdrantClientLike {
@@ -21,6 +29,7 @@ export interface QdrantClientLike {
     collections: Array<{ name: string }>;
   }>;
   getCollection(collectionName: string): Promise<QdrantCollectionInfo>;
+  getCollectionAliases(collectionName: string): Promise<QdrantCollectionAliases>;
   scroll(
     collectionName: string,
     request: {

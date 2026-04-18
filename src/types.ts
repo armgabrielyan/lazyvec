@@ -2,7 +2,9 @@ export type Provider = "qdrant";
 
 export type Screen = "connections" | "main";
 
-export type Panel = "collections" | "records" | "inspector";
+export type Panel = "collections" | "records" | "inspector" | "stats";
+
+export type RightTab = "records" | "stats";
 
 export type ConnectionSource = "config" | "cli";
 

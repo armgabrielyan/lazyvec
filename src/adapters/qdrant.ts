@@ -2,6 +2,7 @@ import type {
   AdapterCapabilities,
   Collection,
   CollectionDetails,
+  CollectionStats,
   HealthStatus,
   ListOptions,
   SearchOptions,
@@ -14,6 +15,7 @@ import type {
 import { createQdrantClient, type QdrantClientFactory, type QdrantClientLike, type QdrantPoint, type QdrantPointId } from "./qdrant-client";
 import type { ConnectionProfile } from "../types";
 import { toQdrantFilter } from "./qdrant-filter";
+import { buildCollectionStats } from "./qdrant-stats";
 
 export const qdrantCapabilities: AdapterCapabilities = {
   listCollections: true,
@@ -26,6 +28,7 @@ export const qdrantCapabilities: AdapterCapabilities = {
   searchByVector: true,
   searchByText: false,
   deleteRecords: true,
+  getCollectionStats: true,
 };
 
 interface QdrantAdapterOptions {
@@ -158,12 +161,30 @@ export class QdrantAdapter implements VectorDBAdapter {
     return { deleted: ids.length };
   }
 
+  async getCollectionStats(collection: string): Promise<CollectionStats> {
+    const client = this.requireClient();
+    const info = await client.getCollection(collection);
+    const aliases = await fetchAliasesSafely(client, collection);
+    return buildCollectionStats(info, aliases);
+  }
+
   private requireClient(): QdrantClientLike {
     if (this.client === null) {
       throw new Error("QdrantAdapter must be connected before use");
     }
 
     return this.client;
+  }
+}
+
+async function fetchAliasesSafely(
+  client: QdrantClientLike,
+  collection: string,
+): Promise<Awaited<ReturnType<QdrantClientLike["getCollectionAliases"]>> | null> {
+  try {
+    return await client.getCollectionAliases(collection);
+  } catch {
+    return null;
   }
 }
 
