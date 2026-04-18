@@ -13,6 +13,7 @@ Thanks for your interest in contributing! This guide covers everything you need 
 - [Documentation](#-documentation)
 - [Submitting a Pull Request](#-submitting-a-pull-request)
 - [Code Style](#-code-style)
+- [Recording Demos](#-recording-demos)
 - [Release Process](#-release-process)
 
 ## 🔧 Development Setup
@@ -236,6 +237,36 @@ Out-of-date docs are treated as a bug.
 - Use `scrollbox` for content that can exceed the pane.
 - Paste handling goes through `renderer.keyInput.on("paste", ...)` and `routePaste` in
   `state/app-state.ts` (bracketed-paste markers are stripped).
+
+## 🎬 Recording Demos
+
+The animated GIFs embedded in the README are generated from
+[VHS](https://github.com/charmbracelet/vhs) tapes under `demo/tapes/`. Each
+feature has its own tape (`overview`, `connections`, `filter`, `similar`,
+`delete`, `yank`) and shares a `settings.tape` for theme/size/speed.
+
+```bash
+brew install vhs     # macOS; see VHS docs for other platforms
+
+# Regenerate a single demo
+vhs demo/tapes/overview.tape
+
+# Regenerate all demos
+for t in demo/tapes/*.tape; do
+  [ "$(basename "$t")" = "settings.tape" ] && continue
+  vhs "$t"
+done
+```
+
+`demo/tapes/setup.sh` boots a local Chroma server, seeds the `movies` and
+`articles` collections (via `scratch/seed-chroma.ts`), and writes a
+**sandboxed** config to `/tmp/lazyvec-demo-home/.lazyvec/config.toml` so the
+demo never touches your real `~/.lazyvec/`. Each tape sources it before
+launching `bun run src/index.tsx`.
+
+When you ship a UI change that affects what the GIFs show, regenerate the
+relevant tape(s) and commit the updated `.gif` files alongside the code.
+See [`demo/tapes/README.md`](./demo/tapes/README.md) for more.
 
 ## 🚢 Release Process
 

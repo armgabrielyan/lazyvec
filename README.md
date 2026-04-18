@@ -46,22 +46,10 @@ all without leaving the terminal.
 
 ## Demo
 
-```
-┌ Collections ────────────────┐┌ Records (50) ──────────────── [Stats] ┐
-│ > customer-support-messages ││ ┌ id ───── title ────────── rating ── ┐│
-│   movies                    ││ │ m-1      Blade Runner      8.1      ││
-│   articles                  ││ │ m-2      The Godfather     9.2      ││
-│                             ││ │ m-3      Spirited Away     8.6      ││
-│                             ││ │ m-4      Parasite          8.5      ││
-│                             ││ └─────────────────────────────────────┘│
-│                             │└─ Inspector ───────────────────────────┘
-│                             │ id: m-2                                 │
-│                             │ metadata: { "title": "The Godfather",   │
-│                             │             "year": 1972, ... }         │
-│                             │ vector: [0.1, 0.2, ...] (1,024 dims)    │
-└─────────────────────────────┘└────────────────────────────────────────┘
- q: quit  j/k: move  Enter: open  /: filter  s: similar  d: delete  ?: help
-```
+![lazyvec overview](https://raw.githubusercontent.com/armgabrielyan/lazyvec/main/demo/overview.gif)
+
+All demo GIFs are generated from [VHS tapes](./demo/tapes) — see
+`demo/tapes/README.md` for how to regenerate them.
 
 ## ✨ Features
 
@@ -312,6 +300,8 @@ delete only apply to config-file connections; CLI connections are ephemeral).
 
 ### Add / Edit / Delete Connections
 
+![Add Connection form](https://raw.githubusercontent.com/armgabrielyan/lazyvec/main/demo/connections.gif)
+
 The connection form is **provider-aware** — only the fields relevant to the selected provider are
 shown:
 
@@ -356,6 +346,8 @@ With a collection selected, the right pane has a **Stats** tab showing:
 
 ### Filter Records
 
+![Filter bar demo](https://raw.githubusercontent.com/armgabrielyan/lazyvec/main/demo/filter.gif)
+
 Press `/` to open the filter bar, type an expression, and press `Enter` to apply. The bar stays
 open so you can refine. `Esc` closes the bar (filter remains active); a second `Esc` clears it.
 
@@ -384,11 +376,15 @@ status:active count:>10 name:"Gjon Mili"
 
 ### Find Similar (Vector Search)
 
+![Find similar demo](https://raw.githubusercontent.com/armgabrielyan/lazyvec/main/demo/similar.gif)
+
 Press `s` on a selected record to search for similar records by vector. If the record's vector
 hasn't been fetched yet, it is loaded automatically before searching. Results display with a
 score column. Press `Esc` to return to the normal record list.
 
 ### Delete Records
+
+![Delete + visual select demo](https://raw.githubusercontent.com/armgabrielyan/lazyvec/main/demo/delete.gif)
 
 Press `d` on a selected record to delete it. A confirmation dialog appears — `Enter` confirms,
 `Esc` cancels. Deletions are permanent.
@@ -403,6 +399,8 @@ Press `V` (Shift+V) to enter visual selection mode:
 - `Esc` cancels the selection.
 
 ### Copy / Yank
+
+![Yank demo](https://raw.githubusercontent.com/armgabrielyan/lazyvec/main/demo/yank.gif)
 
 Vim-style yank — press `y` then a second key:
 
