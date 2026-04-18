@@ -13,6 +13,7 @@ Thanks for your interest in contributing! This guide covers everything you need 
 - [Documentation](#-documentation)
 - [Submitting a Pull Request](#-submitting-a-pull-request)
 - [Code Style](#-code-style)
+- [Release Process](#-release-process)
 
 ## 🔧 Development Setup
 
@@ -235,3 +236,57 @@ Out-of-date docs are treated as a bug.
 - Use `scrollbox` for content that can exceed the pane.
 - Paste handling goes through `renderer.keyInput.on("paste", ...)` and `routePaste` in
   `state/app-state.ts` (bracketed-paste markers are stripped).
+
+## 🚢 Release Process
+
+Releases are triggered by pushing a `vX.Y.Z` tag. A tag push runs
+[`.github/workflows/release.yml`](./.github/workflows/release.yml), which:
+
+1. Cross-compiles prebuilt binaries with `bun build --compile` for five targets
+   (`linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`, `windows-x64`).
+2. Packages each as a tarball (or zip for Windows) and uploads it.
+3. Generates release notes from Conventional Commits via
+   [`git-cliff`](https://git-cliff.org/) using [`cliff.toml`](./cliff.toml).
+4. Creates the GitHub Release with the binaries + `SHA256SUMS.txt` attached.
+5. Publishes the [npm wrapper](./npm) — its `postinstall` downloads the binary matching
+   `package.json#version` from the GitHub Release.
+
+### Cutting a release
+
+```bash
+# 1. Make sure main is clean and CI is green.
+git checkout main && git pull
+
+# 2. Bump the version in package.json (no commit, no tag yet).
+VERSION=0.2.0
+bun x npm version "$VERSION" --no-git-tag-version
+
+# 3. Regenerate CHANGELOG.md from the tags.
+bunx git-cliff --tag "v$VERSION" -o CHANGELOG.md
+
+# 4. Commit + tag.
+git add package.json CHANGELOG.md
+git commit -m "chore(release): v$VERSION"
+git tag -a "v$VERSION" -m "Release v$VERSION"
+
+# 5. Push — the Release workflow takes over.
+git push origin main
+git push origin "v$VERSION"
+```
+
+### Secrets the workflow needs
+
+| Secret | Purpose |
+|--------|---------|
+| `NPM_TOKEN` | Automation token for `npm publish`; set at the repo level |
+| `GITHUB_TOKEN` | Provided automatically; used by `softprops/action-gh-release` |
+
+### Branch protection
+
+`main` should require:
+
+- The **CI / Typecheck + Tests** check to pass
+- PRs before merge (no direct pushes)
+- Linear history (optional but recommended)
+
+Configure under **Settings → Branches → Branch protection rules** for `main`.

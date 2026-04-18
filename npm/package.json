@@ -1,0 +1,49 @@
+{
+  "name": "lazyvec",
+  "version": "0.0.0",
+  "description": "A terminal UI for browsing vector databases (Qdrant, Pinecone, Chroma).",
+  "license": "MIT",
+  "author": "Armen Gabrielyan",
+  "homepage": "https://github.com/armgabrielyan/lazyvec",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/armgabrielyan/lazyvec",
+    "directory": "npm"
+  },
+  "bugs": {
+    "url": "https://github.com/armgabrielyan/lazyvec/issues"
+  },
+  "keywords": [
+    "vector-database",
+    "qdrant",
+    "pinecone",
+    "chroma",
+    "tui",
+    "terminal",
+    "cli"
+  ],
+  "bin": {
+    "lazyvec": "bin/lazyvec.js"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "files": [
+    "bin/",
+    "install.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

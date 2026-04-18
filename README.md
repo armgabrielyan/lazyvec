@@ -1,5 +1,8 @@
 # lazyvec
 
+[![CI](https://github.com/armgabrielyan/lazyvec/actions/workflows/ci.yml/badge.svg)](https://github.com/armgabrielyan/lazyvec/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/lazyvec)](https://www.npmjs.com/package/lazyvec)
+[![npm downloads](https://img.shields.io/npm/dm/lazyvec)](https://www.npmjs.com/package/lazyvec)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **A terminal UI for browsing vector databases.**
@@ -76,7 +79,46 @@ all without leaving the terminal.
 
 ## 📦 Installation
 
-**Prerequisites:** [Bun](https://bun.sh) ≥ 1.3 (runtime + package manager).
+### ⚡ Quick Install (macOS / Linux)
+
+```bash
+curl -sSf https://raw.githubusercontent.com/armgabrielyan/lazyvec/main/install.sh | sh
+```
+
+Detects your OS/arch, downloads the matching binary from the latest
+[GitHub Release](https://github.com/armgabrielyan/lazyvec/releases), verifies its SHA256, and
+drops it into `~/.local/bin`. Pin a specific version with `LAZYVEC_VERSION=v0.2.0`.
+
+### 📦 npm / npx
+
+```bash
+# Install globally
+npm install -g lazyvec
+
+# Or run once
+npx lazyvec
+```
+
+The npm package is a thin wrapper — on install, a prebuilt binary matching your platform is
+downloaded from the matching GitHub Release and checksum-verified.
+
+### ⬇️ Manual Download
+
+Grab a tarball (or `.zip` for Windows) from the [GitHub Releases](https://github.com/armgabrielyan/lazyvec/releases) page:
+
+| Platform | Architecture | Archive |
+|----------|--------------|---------|
+| macOS | Intel | `lazyvec-VERSION-darwin-x64.tar.gz` |
+| macOS | Apple Silicon | `lazyvec-VERSION-darwin-arm64.tar.gz` |
+| Linux | x86_64 | `lazyvec-VERSION-linux-x64.tar.gz` |
+| Linux | ARM64 | `lazyvec-VERSION-linux-arm64.tar.gz` |
+| Windows | x86_64 | `lazyvec-VERSION-windows-x64.zip` |
+
+Each release also includes `SHA256SUMS.txt`.
+
+### 🔨 From Source
+
+Prerequisites: [Bun](https://bun.sh) ≥ 1.3.
 
 ```bash
 git clone https://github.com/armgabrielyan/lazyvec
@@ -92,7 +134,7 @@ bun run dev        # Watch mode
 bun run start      # Run once
 bun run typecheck  # tsc --noEmit
 bun test           # Run the test suite
-bun run build      # Bundle to dist/
+bun run build      # Bundle to dist/ (requires Bun runtime)
 ```
 
 ## 🚀 Quick Start

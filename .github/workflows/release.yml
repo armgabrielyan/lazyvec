@@ -1,0 +1,130 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { bun: bun-linux-x64, name: linux-x64, ext: tar.gz, exe: lazyvec }
+          - { bun: bun-linux-arm64, name: linux-arm64, ext: tar.gz, exe: lazyvec }
+          - { bun: bun-darwin-x64, name: darwin-x64, ext: tar.gz, exe: lazyvec }
+          - { bun: bun-darwin-arm64, name: darwin-arm64, ext: tar.gz, exe: lazyvec }
+          - { bun: bun-windows-x64, name: windows-x64, ext: zip, exe: lazyvec.exe }
+    env:
+      TARGET_BUN: ${{ matrix.target.bun }}
+      TARGET_NAME: ${{ matrix.target.name }}
+      TARGET_EXT: ${{ matrix.target.ext }}
+      TARGET_EXE: ${{ matrix.target.exe }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Compile binary
+        run: |
+          mkdir -p dist
+          bun build ./src/index.tsx \
+            --compile \
+            --minify \
+            --target="$TARGET_BUN" \
+            --outfile "dist/$TARGET_EXE"
+
+      - name: Package archive
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCHIVE="lazyvec-${VERSION}-${TARGET_NAME}.${TARGET_EXT}"
+          cd dist
+          if [ "$TARGET_EXT" = "zip" ]; then
+            zip "../$ARCHIVE" "$TARGET_EXE"
+          else
+            tar -czf "../$ARCHIVE" "$TARGET_EXE"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.target.name }}
+          path: lazyvec-*
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install git-cliff
+        run: bun install -g git-cliff
+
+      - name: Generate release notes
+        run: git-cliff --tag "$GITHUB_REF_NAME" --strip header -o RELEASE_NOTES.md
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Compute SHA256SUMS
+        working-directory: artifacts
+        run: sha256sum lazyvec-* > SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          body_path: RELEASE_NOTES.md
+          files: |
+            artifacts/lazyvec-*
+            artifacts/SHA256SUMS.txt
+
+  npm-publish:
+    name: Publish to npm
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Sync wrapper version
+        working-directory: npm
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Publish
+        working-directory: npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
