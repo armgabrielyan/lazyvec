@@ -1,7 +1,7 @@
 import type { Collection, CollectionStats, SearchResult, VectorPage, VectorRecord } from "../adapters/types";
 import { createAdapter as createDefaultAdapter } from "../adapters/registry";
 import type { BrowserData } from "../app-data/browser-data";
-import { connectionFormFieldKeys, fieldMaxLength, type ConnectionFormCursors, type ConnectionFormFields } from "../components/ConnectionForm";
+import { connectionFormFieldKeys, fieldMaxLength, visibleFieldKeys, type ConnectionFormCursors, type ConnectionFormFields } from "../components/ConnectionForm";
 import { clamp } from "../format";
 import { defaultCollectionPanelWidth, resizeCollectionPanelWidth } from "../layout/collection-panel";
 import { inferTableSchema, type TableSchema } from "../layout/metadata-schema";
@@ -766,11 +766,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     }
 
     case "CYCLE_CONNECTION_FORM_FOCUS": {
-      const fieldCount = connectionFormFieldKeys.length;
-      const next = (state.connectionFormFocusedField + action.delta + fieldCount) % fieldCount;
+      const visibleKeys = visibleFieldKeys(state.connectionFormFields.provider);
+      const visibleIndices = visibleKeys.map((key) => connectionFormFieldKeys.indexOf(key));
+      const currentPosition = visibleIndices.indexOf(state.connectionFormFocusedField);
+      const base = currentPosition === -1 ? 0 : currentPosition;
+      const nextPosition = (base + action.delta + visibleIndices.length) % visibleIndices.length;
       return {
         ...state,
-        connectionFormFocusedField: next,
+        connectionFormFocusedField: visibleIndices[nextPosition] ?? 0,
       };
     }
 
@@ -779,9 +782,16 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const current = providers.indexOf(state.connectionFormFields.provider as Provider);
       const base = current === -1 ? 0 : current;
       const next = (base + action.delta + providers.length) % providers.length;
+      const nextProvider = providers[next]!;
+      const visibleKeys = visibleFieldKeys(nextProvider);
+      const visibleIndices = visibleKeys.map((key) => connectionFormFieldKeys.indexOf(key));
+      const focused = visibleIndices.includes(state.connectionFormFocusedField)
+        ? state.connectionFormFocusedField
+        : visibleIndices[0] ?? 0;
       return {
         ...state,
-        connectionFormFields: { ...state.connectionFormFields, provider: providers[next]! },
+        connectionFormFields: { ...state.connectionFormFields, provider: nextProvider },
+        connectionFormFocusedField: focused,
         connectionFormError: null,
       };
     }

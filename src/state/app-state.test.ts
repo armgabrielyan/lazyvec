@@ -155,16 +155,47 @@ describe("connection form reducer", () => {
     expect(state.connectionFormCursors).toEqual([5, 0, 0, 5, 2, 4]);
   });
 
-  test("CYCLE_CONNECTION_FORM_FOCUS wraps through all 6 fields", () => {
+  test("CYCLE_CONNECTION_FORM_FOCUS wraps through qdrant's 4 visible fields", () => {
     const opened = formOpenedState();
+    const afterThree = [1, 2, 3].reduce(
+      (s) => appReducer(s, { type: "CYCLE_CONNECTION_FORM_FOCUS", delta: 1 }),
+      opened,
+    );
+    expect(afterThree.connectionFormFocusedField).toBe(3);
+
+    const wrapped = appReducer(afterThree, { type: "CYCLE_CONNECTION_FORM_FOCUS", delta: 1 });
+    expect(wrapped.connectionFormFocusedField).toBe(0);
+  });
+
+  test("CYCLE_CONNECTION_FORM_FOCUS skips url for pinecone", () => {
+    const opened = formOpenedState({ ...emptyFormFields, provider: "pinecone" });
+    const afterName = appReducer(opened, { type: "CYCLE_CONNECTION_FORM_FOCUS", delta: 1 });
+    expect(afterName.connectionFormFocusedField).toBe(1);
+    const afterProvider = appReducer(afterName, { type: "CYCLE_CONNECTION_FORM_FOCUS", delta: 1 });
+    expect(afterProvider.connectionFormFocusedField).toBe(3);
+    const wrapped = appReducer(afterProvider, { type: "CYCLE_CONNECTION_FORM_FOCUS", delta: 1 });
+    expect(wrapped.connectionFormFocusedField).toBe(0);
+  });
+
+  test("CYCLE_CONNECTION_FORM_FOCUS walks all 6 fields for chroma", () => {
+    const opened = formOpenedState({ ...emptyFormFields, provider: "chroma" });
     const afterFive = [1, 2, 3, 4, 5].reduce(
       (s) => appReducer(s, { type: "CYCLE_CONNECTION_FORM_FOCUS", delta: 1 }),
       opened,
     );
     expect(afterFive.connectionFormFocusedField).toBe(5);
+    const wrapped = appReducer(afterFive, { type: "CYCLE_CONNECTION_FORM_FOCUS", delta: 1 });
+    expect(wrapped.connectionFormFocusedField).toBe(0);
+  });
 
-    const afterSix = appReducer(afterFive, { type: "CYCLE_CONNECTION_FORM_FOCUS", delta: 1 });
-    expect(afterSix.connectionFormFocusedField).toBe(0);
+  test("CYCLE_CONNECTION_FORM_PROVIDER clamps focus when switching to a provider with fewer fields", () => {
+    const opened = formOpenedState({ ...emptyFormFields, provider: "chroma" });
+    const atTenant = appReducer(opened, { type: "CYCLE_CONNECTION_FORM_FOCUS", delta: 4 });
+    expect(atTenant.connectionFormFocusedField).toBe(4);
+
+    const toQdrant = appReducer(atTenant, { type: "CYCLE_CONNECTION_FORM_PROVIDER", delta: -1 });
+    expect(toQdrant.connectionFormFields.provider).toBe("pinecone");
+    expect(toQdrant.connectionFormFocusedField).toBe(0);
   });
 
   test("CYCLE_CONNECTION_FORM_PROVIDER walks the supported provider list and wraps", () => {

@@ -30,21 +30,45 @@ export const connectionFormFieldKeys: (keyof ConnectionFormFields)[] = [
   "database",
 ];
 
+const qdrantFields: (keyof ConnectionFormFields)[] = ["name", "provider", "url", "apiKey"];
+const pineconeFields: (keyof ConnectionFormFields)[] = ["name", "provider", "apiKey"];
+const chromaFields: (keyof ConnectionFormFields)[] = [
+  "name",
+  "provider",
+  "url",
+  "apiKey",
+  "tenant",
+  "database",
+];
+
+export function visibleFieldKeys(provider: string): (keyof ConnectionFormFields)[] {
+  if (provider === "pinecone") return pineconeFields;
+  if (provider === "chroma") return chromaFields;
+  return qdrantFields;
+}
+
 const labelWidth = 10;
 const fieldWidth = 80;
 const formWidth = labelWidth + fieldWidth + 8;
 export const fieldMaxLength = 2048;
 
-const fieldLabels = ["Name:", "Provider:", "URL:", "API Key:", "Tenant:", "Database:"];
+const fieldLabels: Record<keyof ConnectionFormFields, string> = {
+  name: "Name:",
+  provider: "Provider:",
+  url: "URL:",
+  apiKey: "API Key:",
+  tenant: "Tenant:",
+  database: "Database:",
+};
 
 function hintFor(fields: ConnectionFormFields): string {
   if (fields.provider === "pinecone") {
-    return "Tab: next  Enter: save  Esc: cancel  (URL, Tenant, Database unused; API Key required)";
+    return "Tab: next  Enter: save  Esc: cancel  (API Key required)";
   }
   if (fields.provider === "chroma") {
     return "Tab: next  Enter: save  Esc: cancel  (URL for local, API Key for Cloud; Tenant/Database optional)";
   }
-  return "Tab: next  Enter: save  Esc: cancel  (Tenant, Database unused)";
+  return "Tab: next  Enter: save  Esc: cancel";
 }
 
 function TextInputField({ value, cursor, focused }: { value: string; cursor: number; focused: boolean }) {
@@ -89,6 +113,7 @@ function ProviderField({ value, focused }: { value: string; focused: boolean }) 
 
 export function ConnectionForm({ mode, fields, focusedField, cursors, error }: ConnectionFormProps) {
   const title = mode.kind === "add" ? " Add Connection " : " Edit Connection ";
+  const visibleKeys = visibleFieldKeys(fields.provider);
 
   return (
     <box
@@ -104,22 +129,26 @@ export function ConnectionForm({ mode, fields, focusedField, cursors, error }: C
       <text fg={colors.accent}>{title}</text>
       <text> </text>
 
-      {connectionFormFieldKeys.map((key, index) => (
-        <box key={key} flexDirection="row" alignItems="center" height={3}>
-          <text fg={focusedField === index ? colors.accent : colors.muted}>
-            {(fieldLabels[index] ?? "").padEnd(labelWidth)}
-          </text>
-          {index === 1 ? (
-            <ProviderField value={fields.provider} focused={focusedField === index} />
-          ) : (
-            <TextInputField
-              value={fields[key]}
-              cursor={cursors[index] ?? 0}
-              focused={focusedField === index}
-            />
-          )}
-        </box>
-      ))}
+      {visibleKeys.map((key) => {
+        const absoluteIndex = connectionFormFieldKeys.indexOf(key);
+        const focused = focusedField === absoluteIndex;
+        return (
+          <box key={key} flexDirection="row" alignItems="center" height={3}>
+            <text fg={focused ? colors.accent : colors.muted}>
+              {fieldLabels[key].padEnd(labelWidth)}
+            </text>
+            {key === "provider" ? (
+              <ProviderField value={fields.provider} focused={focused} />
+            ) : (
+              <TextInputField
+                value={fields[key]}
+                cursor={cursors[absoluteIndex] ?? 0}
+                focused={focused}
+              />
+            )}
+          </box>
+        );
+      })}
 
       <text> </text>
       {error ? <text fg={colors.error}>{error}</text> : null}
