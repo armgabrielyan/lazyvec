@@ -1,6 +1,21 @@
 {
   "name": "lazyvec",
   "version": "0.1.0",
+  "description": "A terminal UI for browsing vector databases.",
+  "license": "MIT",
+  "author": "Armen Gabrielyan",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/armgabrielyan/lazyvec"
+  },
+  "keywords": [
+    "vector-database",
+    "qdrant",
+    "pinecone",
+    "chroma",
+    "tui",
+    "terminal"
+  ],
   "module": "src/index.tsx",
   "type": "module",
   "private": true,

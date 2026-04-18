@@ -79,8 +79,12 @@ dispatch reducer actions; `components/*` render from props.
 - Keep documentation in lockstep with code. Any behavior change, new feature,
   config field, keybinding, or capability MUST be reflected in the same
   change:
-  - `README.md` — user-facing usage, config syntax, keys. note when they ship; remove them from the open list.
-  - `AGENTS.md` (this file) — when a convention, architectural boundary, or workflow rule changes.
+  - `README.md` — user-facing usage, config syntax, keys. When roadmap items
+    ship, remove them from the open list.
+  - `CONTRIBUTING.md` — dev setup, testing guidance, adapter authoring steps,
+    commit conventions. Update when those workflows change.
+  - `AGENTS.md` (this file) — when a convention, architectural boundary, or
+    workflow rule changes.
 - Do not defer doc updates to a follow-up. Treat out-of-date docs as a bug.
 
 ## Planning & Commits
