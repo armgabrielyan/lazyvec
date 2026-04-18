@@ -1,6 +1,6 @@
 {
   "name": "lazyvec",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "A terminal UI for browsing vector databases (Qdrant, Pinecone, Chroma).",
   "license": "MIT",
   "author": "Armen Gabrielyan",
