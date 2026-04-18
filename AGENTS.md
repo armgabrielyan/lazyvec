@@ -75,6 +75,14 @@ dispatch reducer actions; `components/*` render from props.
 - Paste handling goes through `renderer.keyInput.on("paste", ...)` and
   `routePaste` in `state/app-state.ts` (bracketed-paste markers are stripped).
 
+## Documentation
+- Keep documentation in lockstep with code. Any behavior change, new feature,
+  config field, keybinding, or capability MUST be reflected in the same
+  change:
+  - `README.md` — user-facing usage, config syntax, keys. note when they ship; remove them from the open list.
+  - `AGENTS.md` (this file) — when a convention, architectural boundary, or workflow rule changes.
+- Do not defer doc updates to a follow-up. Treat out-of-date docs as a bug.
+
 ## Planning & Commits
 - Break non-trivial work into explicit steps; verify each before moving on.
 - Conventional commit prefixes (`feat:`, `fix:`, `refactor:`, `docs:`).
