@@ -55,7 +55,13 @@ export function useAppKeyboard({
       return;
     }
 
-    if ((key.ctrl && key.name === "c") || key.name === "q") {
+    if (key.ctrl && key.name === "c") {
+      renderer.destroy();
+      return;
+    }
+
+    const textInputActive = state.connectionFormMode !== null || state.filterOpen;
+    if (key.name === "q" && !textInputActive) {
       renderer.destroy();
       return;
     }
