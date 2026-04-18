@@ -7,9 +7,11 @@ export interface ConnectionFormFields {
   provider: string;
   url: string;
   apiKey: string;
+  tenant: string;
+  database: string;
 }
 
-export type ConnectionFormCursors = [number, number, number, number];
+export type ConnectionFormCursors = [number, number, number, number, number, number];
 
 export interface ConnectionFormProps {
   mode: ConnectionFormMode;
@@ -19,20 +21,30 @@ export interface ConnectionFormProps {
   error: string | null;
 }
 
-export const connectionFormFieldKeys: (keyof ConnectionFormFields)[] = ["name", "provider", "url", "apiKey"];
+export const connectionFormFieldKeys: (keyof ConnectionFormFields)[] = [
+  "name",
+  "provider",
+  "url",
+  "apiKey",
+  "tenant",
+  "database",
+];
 
 const labelWidth = 10;
 const fieldWidth = 80;
 const formWidth = labelWidth + fieldWidth + 8;
 export const fieldMaxLength = 2048;
 
-const fieldLabels = ["Name:", "Provider:", "URL:", "API Key:"];
+const fieldLabels = ["Name:", "Provider:", "URL:", "API Key:", "Tenant:", "Database:"];
 
 function hintFor(fields: ConnectionFormFields): string {
   if (fields.provider === "pinecone") {
-    return "Tab: next  Enter: save  Esc: cancel  (URL unused, API Key required)";
+    return "Tab: next  Enter: save  Esc: cancel  (URL, Tenant, Database unused; API Key required)";
   }
-  return "Tab: next  Enter: save  Esc: cancel";
+  if (fields.provider === "chroma") {
+    return "Tab: next  Enter: save  Esc: cancel  (URL for local, API Key for Cloud; Tenant/Database optional)";
+  }
+  return "Tab: next  Enter: save  Esc: cancel  (Tenant, Database unused)";
 }
 
 function TextInputField({ value, cursor, focused }: { value: string; cursor: number; focused: boolean }) {

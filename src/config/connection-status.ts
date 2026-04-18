@@ -38,10 +38,31 @@ function reachabilityTarget(connection: ConnectionProfile): ReachabilityTarget |
     };
   }
 
+  if (connection.provider === "chroma") {
+    if (connection.url) {
+      const headers: Record<string, string> = {};
+      if (connection.apiKey) {
+        headers["x-chroma-token"] = connection.apiKey;
+      }
+      return { url: joinPath(connection.url, "/api/v2/heartbeat"), headers };
+    }
+    if (!connection.apiKey) return null;
+    return {
+      url: "https://api.trychroma.com/api/v2/heartbeat",
+      headers: { "x-chroma-token": connection.apiKey },
+    };
+  }
+
   if (!connection.url) return null;
+
   const headers: Record<string, string> = {};
   if (connection.apiKey) {
     headers["api-key"] = connection.apiKey;
   }
   return { url: connection.url, headers };
+}
+
+function joinPath(base: string, path: string): string {
+  const trimmed = base.endsWith("/") ? base.slice(0, -1) : base;
+  return `${trimmed}${path}`;
 }

@@ -9,7 +9,7 @@ import type { FilterCondition } from "../filter/parse";
 import { formatFilterSummary } from "../filter/parse";
 import type { ConnectionFormMode, ConnectionProfile, ConnectionState, ConnectionStatus, Panel, Provider, RightTab, Screen } from "../types";
 
-export const selectableProviders: Provider[] = ["qdrant", "pinecone"];
+export const selectableProviders: Provider[] = ["qdrant", "pinecone", "chroma"];
 
 export const panelOrder: Panel[] = ["collections", "records", "inspector"];
 
@@ -20,8 +20,15 @@ export const defaultPageSize = 50;
 export const searchLimit = 20;
 export const reachabilityPollIntervalMs = 5000;
 export const EMPTY_STRING_SET: ReadonlySet<string> = new Set<string>();
-export const emptyFormFields: ConnectionFormFields = { name: "", provider: "qdrant", url: "", apiKey: "" };
-const emptyFormCursors: ConnectionFormCursors = [0, 0, 0, 0];
+export const emptyFormFields: ConnectionFormFields = {
+  name: "",
+  provider: "qdrant",
+  url: "",
+  apiKey: "",
+  tenant: "",
+  database: "",
+};
+const emptyFormCursors: ConnectionFormCursors = [0, 0, 0, 0, 0, 0];
 
 export type TuiDimension = number | "auto" | `${number}%`;
 
@@ -724,6 +731,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           0,
           action.fields.url.length,
           action.fields.apiKey.length,
+          action.fields.tenant.length,
+          action.fields.database.length,
         ],
         connectionFormError: null,
       };

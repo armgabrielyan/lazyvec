@@ -121,41 +121,65 @@ describe("collection stats reducer", () => {
 });
 
 describe("connection form reducer", () => {
-  test("form field keys include apiKey after url", () => {
-    expect(connectionFormFieldKeys).toEqual(["name", "provider", "url", "apiKey"]);
+  test("form field keys end with tenant/database for chroma support", () => {
+    expect(connectionFormFieldKeys).toEqual([
+      "name",
+      "provider",
+      "url",
+      "apiKey",
+      "tenant",
+      "database",
+    ]);
   });
 
-  test("empty form fields include blank apiKey", () => {
-    expect(emptyFormFields).toEqual({ name: "", provider: "qdrant", url: "", apiKey: "" });
+  test("empty form fields include blank tenant/database", () => {
+    expect(emptyFormFields).toEqual({
+      name: "",
+      provider: "qdrant",
+      url: "",
+      apiKey: "",
+      tenant: "",
+      database: "",
+    });
   });
 
-  test("OPEN_CONNECTION_FORM initializes cursor for apiKey", () => {
-    const state = formOpenedState({ name: "cloud", provider: "qdrant", url: "https://x", apiKey: "sk-1" });
-    expect(state.connectionFormCursors).toEqual([5, 0, 9, 4]);
+  test("OPEN_CONNECTION_FORM initializes cursor for every field", () => {
+    const state = formOpenedState({
+      name: "cloud",
+      provider: "chroma",
+      url: "",
+      apiKey: "ck-xy",
+      tenant: "tt",
+      database: "db-p",
+    });
+    expect(state.connectionFormCursors).toEqual([5, 0, 0, 5, 2, 4]);
   });
 
-  test("CYCLE_CONNECTION_FORM_FOCUS wraps through 4 fields", () => {
+  test("CYCLE_CONNECTION_FORM_FOCUS wraps through all 6 fields", () => {
     const opened = formOpenedState();
-    const afterThree = [1, 2, 3].reduce(
+    const afterFive = [1, 2, 3, 4, 5].reduce(
       (s) => appReducer(s, { type: "CYCLE_CONNECTION_FORM_FOCUS", delta: 1 }),
       opened,
     );
-    expect(afterThree.connectionFormFocusedField).toBe(3);
+    expect(afterFive.connectionFormFocusedField).toBe(5);
 
-    const afterFour = appReducer(afterThree, { type: "CYCLE_CONNECTION_FORM_FOCUS", delta: 1 });
-    expect(afterFour.connectionFormFocusedField).toBe(0);
+    const afterSix = appReducer(afterFive, { type: "CYCLE_CONNECTION_FORM_FOCUS", delta: 1 });
+    expect(afterSix.connectionFormFocusedField).toBe(0);
   });
 
-  test("CYCLE_CONNECTION_FORM_PROVIDER toggles between qdrant and pinecone", () => {
+  test("CYCLE_CONNECTION_FORM_PROVIDER walks the supported provider list and wraps", () => {
     const opened = formOpenedState();
-    const next = appReducer(opened, { type: "CYCLE_CONNECTION_FORM_PROVIDER", delta: 1 });
-    expect(next.connectionFormFields.provider).toBe("pinecone");
+    const afterOne = appReducer(opened, { type: "CYCLE_CONNECTION_FORM_PROVIDER", delta: 1 });
+    expect(afterOne.connectionFormFields.provider).toBe("pinecone");
 
-    const wrapped = appReducer(next, { type: "CYCLE_CONNECTION_FORM_PROVIDER", delta: 1 });
+    const afterTwo = appReducer(afterOne, { type: "CYCLE_CONNECTION_FORM_PROVIDER", delta: 1 });
+    expect(afterTwo.connectionFormFields.provider).toBe("chroma");
+
+    const wrapped = appReducer(afterTwo, { type: "CYCLE_CONNECTION_FORM_PROVIDER", delta: 1 });
     expect(wrapped.connectionFormFields.provider).toBe("qdrant");
 
-    const back = appReducer(next, { type: "CYCLE_CONNECTION_FORM_PROVIDER", delta: -1 });
-    expect(back.connectionFormFields.provider).toBe("qdrant");
+    const back = appReducer(opened, { type: "CYCLE_CONNECTION_FORM_PROVIDER", delta: -1 });
+    expect(back.connectionFormFields.provider).toBe("chroma");
   });
 
   test("UPDATE_CONNECTION_FORM_FIELD can set apiKey at index 3", () => {
@@ -171,16 +195,47 @@ describe("connection form reducer", () => {
     expect(updated.connectionFormCursors[3]).toBe(6);
   });
 
-  test("SAVE_CONNECTION_SUCCESS resets cursors to 4 zeros", () => {
-    const opened = formOpenedState({ name: "a", provider: "qdrant", url: "b", apiKey: "c" });
+  test("UPDATE_CONNECTION_FORM_FIELD can set tenant at index 4", () => {
+    const opened = formOpenedState();
+    const updated = appReducer(opened, {
+      type: "UPDATE_CONNECTION_FORM_FIELD",
+      fieldIndex: 4,
+      value: "my-tenant",
+      cursor: 9,
+    });
+    expect(updated.connectionFormFields.tenant).toBe("my-tenant");
+    expect(updated.connectionFormCursors[4]).toBe(9);
+  });
+
+  test("UPDATE_CONNECTION_FORM_FIELD can set database at index 5", () => {
+    const opened = formOpenedState();
+    const updated = appReducer(opened, {
+      type: "UPDATE_CONNECTION_FORM_FIELD",
+      fieldIndex: 5,
+      value: "prod",
+      cursor: 4,
+    });
+    expect(updated.connectionFormFields.database).toBe("prod");
+    expect(updated.connectionFormCursors[5]).toBe(4);
+  });
+
+  test("SAVE_CONNECTION_SUCCESS resets cursors to six zeros", () => {
+    const opened = formOpenedState({
+      name: "a",
+      provider: "chroma",
+      url: "",
+      apiKey: "ck",
+      tenant: "t",
+      database: "d",
+    });
     const saved = appReducer(opened, { type: "SAVE_CONNECTION_SUCCESS", connections: [] });
-    expect(saved.connectionFormCursors).toEqual([0, 0, 0, 0]);
+    expect(saved.connectionFormCursors).toEqual([0, 0, 0, 0, 0, 0]);
     expect(saved.connectionFormFields).toEqual(emptyFormFields);
   });
 
-  test("initial state cursors have 4 entries", () => {
+  test("initial state cursors have six entries", () => {
     const state = createInitialState([] as ConnectionProfile[]);
-    expect(state.connectionFormCursors).toEqual([0, 0, 0, 0]);
+    expect(state.connectionFormCursors).toEqual([0, 0, 0, 0, 0, 0]);
   });
 });
 
@@ -228,7 +283,7 @@ describe("routePaste", () => {
     const state = appReducer(base, {
       type: "OPEN_CONNECTION_FORM",
       mode: { kind: "add" },
-      fields: { name: "", provider: "qdrant", url: "https://", apiKey: "" },
+      fields: { name: "", provider: "qdrant", url: "https://", apiKey: "", tenant: "", database: "" },
     });
     const atUrl = appReducer(state, { type: "CYCLE_CONNECTION_FORM_FOCUS", delta: 2 });
 

@@ -1,4 +1,4 @@
-export type Provider = "qdrant" | "pinecone";
+export type Provider = "qdrant" | "pinecone" | "chroma";
 
 export type Screen = "connections" | "main";
 
@@ -16,8 +16,12 @@ export interface ConnectionProfile {
   provider: Provider;
   url?: string;
   apiKey?: string;
+  tenant?: string;
+  database?: string;
   urlRaw?: string;
   apiKeyRaw?: string;
+  tenantRaw?: string;
+  databaseRaw?: string;
   description: string;
   source: ConnectionSource;
 }

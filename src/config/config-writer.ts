@@ -9,6 +9,8 @@ export interface ConnectionInput {
   provider: Provider;
   url?: string;
   apiKey?: string;
+  tenant?: string;
+  database?: string;
 }
 
 const CONNECTION_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -33,6 +35,8 @@ interface RawConnection {
   provider: string;
   url?: string;
   api_key?: string;
+  tenant?: string;
+  database?: string;
 }
 
 interface RawConfig {
@@ -45,6 +49,8 @@ function toRawConnection(input: ConnectionInput): RawConnection {
     provider: input.provider,
     ...(input.url ? { url: input.url } : {}),
     ...(input.apiKey ? { api_key: input.apiKey } : {}),
+    ...(input.tenant ? { tenant: input.tenant } : {}),
+    ...(input.database ? { database: input.database } : {}),
   };
 }
 

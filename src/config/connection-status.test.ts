@@ -39,6 +39,56 @@ describe("checkConnectionReachable", () => {
     expect(capture.request?.headers.get("api-key")).toBe("sk-cloud-123");
   });
 
+  test("local chroma with url pings /api/v2/heartbeat", async () => {
+    const capture: { request?: Request } = {};
+    await checkConnectionReachable(
+      {
+        ...baseConnection,
+        id: "chroma-local",
+        name: "chroma-local",
+        provider: "chroma",
+        url: "http://localhost:8000",
+      },
+      stubFetch(capture),
+    );
+    expect(capture.request?.url).toBe("http://localhost:8000/api/v2/heartbeat");
+    expect(capture.request?.headers.get("x-chroma-token")).toBeNull();
+  });
+
+  test("chroma cloud pings api.trychroma.com with token header", async () => {
+    const capture: { request?: Request } = {};
+    const status = await checkConnectionReachable(
+      {
+        ...baseConnection,
+        id: "chroma-cloud",
+        name: "chroma-cloud",
+        provider: "chroma",
+        url: undefined,
+        apiKey: "ck-secret",
+      },
+      stubFetch(capture),
+    );
+    expect(status).toBe("reachable");
+    expect(capture.request?.url).toBe("https://api.trychroma.com/api/v2/heartbeat");
+    expect(capture.request?.headers.get("x-chroma-token")).toBe("ck-secret");
+  });
+
+  test("chroma with no url and no api key returns unknown", async () => {
+    const capture: { request?: Request } = {};
+    const status = await checkConnectionReachable(
+      {
+        ...baseConnection,
+        id: "chroma-bare",
+        name: "chroma-bare",
+        provider: "chroma",
+        url: undefined,
+      },
+      stubFetch(capture),
+    );
+    expect(status).toBe("unknown");
+    expect(capture.request).toBeUndefined();
+  });
+
   test("returns unreachable on network error", async () => {
     const failing: typeof fetch = (async () => {
       throw new Error("ECONNREFUSED");

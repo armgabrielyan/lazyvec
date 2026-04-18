@@ -2,8 +2,8 @@
 
 A terminal UI for browsing and inspecting vector databases.
 
-Built with OpenTUI React and Bun. Supports Qdrant and Pinecone. Start with a connection picker,
-browse collections and records, inspect metadata and vectors, search for similar records,
+Built with OpenTUI React and Bun. Supports Qdrant, Pinecone, and Chroma. Start with a connection
+picker, browse collections and records, inspect metadata and vectors, search for similar records,
 and delete entries — all without leaving the terminal.
 
 ## Run
@@ -24,6 +24,10 @@ url = "http://localhost:6333"
 [connections.cloud-pinecone]
 provider = "pinecone"
 api_key = "pcsk-..."
+
+[connections.local-chroma]
+provider = "chroma"
+url = "http://localhost:8000"
 ```
 
 Secrets can be interpolated from environment variables using `${VAR}` inside `api_key` or
@@ -48,6 +52,7 @@ Or use quick-connect flags:
 ```bash
 bun run start -- --provider qdrant --url http://localhost:6333
 bun run start -- --provider pinecone --api-key pcsk-...
+bun run start -- --provider chroma --url http://localhost:8000
 ```
 
 ### Pinecone
@@ -59,8 +64,39 @@ name.
 
 Pinecone metadata filtering is not wired into the record-list filter bar yet — use `id:<value>`
 to look up a specific record. In the Add/Edit Connection form, focus the Provider field and use
-`←` / `→` (or `space`) to switch between `qdrant` and `pinecone`. Pinecone requires an API Key;
-the URL field is unused.
+`←` / `→` (or `space`) to switch between `qdrant`, `pinecone`, and `chroma`. Pinecone requires an
+API Key; the URL field is unused.
+
+### Chroma
+
+Chroma works in two modes:
+
+**Local server** (`chroma run`). Set `url` to the server (e.g. `http://localhost:8000`). If your
+deployment enforces a token, set `api_key` — lazyvec forwards it as the `x-chroma-token` header.
+
+**Chroma Cloud**. Omit `url` and set `api_key` to your cloud token. Optionally set `tenant` and
+`database` to target a specific workspace; without them lazyvec uses the SDK defaults. The Add/Edit
+Connection form exposes Tenant and Database fields directly — they only apply to the `chroma`
+provider and are ignored otherwise.
+
+```toml
+[connections.chroma-cloud]
+provider = "chroma"
+api_key = "${CHROMA_API_KEY}"
+tenant = "your-tenant-uuid"
+database = "prod"
+```
+
+Quick-connect also supports Cloud flags:
+
+```bash
+bun run start -- --provider chroma --api-key ck-... --tenant your-tenant --database prod
+```
+
+Chroma doesn't persist vector dimensions at the collection level, so lazyvec infers them by
+peeking at the first record. Empty collections therefore show `dim 0` until records are added.
+Distances returned by similarity search are raw Chroma distances (cosine/l2/ip), not scores —
+smaller is closer.
 
 ## Keys
 

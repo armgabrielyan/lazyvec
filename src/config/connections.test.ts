@@ -206,6 +206,118 @@ describe("connection config", () => {
     expect(state.connections[0]).not.toHaveProperty("apiKeyRaw");
   });
 
+  test("parses Chroma Cloud connections with tenant and database", () => {
+    const state = parseConfigText(`
+      [connections.chroma-cloud]
+      provider = "chroma"
+      api_key = "ck-secret"
+      tenant = "tenant-uuid"
+      database = "prod-db"
+    `);
+
+    expect(state.connections).toEqual([
+      {
+        id: "chroma-cloud",
+        name: "chroma-cloud",
+        provider: "chroma",
+        apiKey: "ck-secret",
+        tenant: "tenant-uuid",
+        database: "prod-db",
+        description: "Configured in ~/.lazyvec/config.toml",
+        source: "config",
+      },
+    ]);
+  });
+
+  test("parses local Chroma connections with just a url", () => {
+    const state = parseConfigText(`
+      [connections.local-chroma]
+      provider = "chroma"
+      url = "http://localhost:8000"
+    `);
+
+    expect(state.connections[0]).toEqual({
+      id: "local-chroma",
+      name: "local-chroma",
+      provider: "chroma",
+      url: "http://localhost:8000",
+      description: "Configured in ~/.lazyvec/config.toml",
+      source: "config",
+    });
+  });
+
+  test("Chroma requires url or api_key", () => {
+    expect(() =>
+      parseConfigText(`
+        [connections.bare-chroma]
+        provider = "chroma"
+      `),
+    ).toThrow('Connection "bare-chroma" must include a url or api_key for provider "chroma"');
+  });
+
+  test("tenant/database on non-chroma providers is rejected", () => {
+    expect(() =>
+      parseConfigText(`
+        [connections.local-qdrant]
+        provider = "qdrant"
+        url = "http://localhost:6333"
+        tenant = "nope"
+      `),
+    ).toThrow(/tenant\/database are only valid for provider "chroma"/);
+  });
+
+  test("interpolates ${VAR} in tenant and database", () => {
+    const state = parseConfigText(
+      `
+        [connections.chroma-cloud]
+        provider = "chroma"
+        api_key = "ck-x"
+        tenant = "\${CHROMA_TENANT}"
+        database = "\${CHROMA_DATABASE}"
+      `,
+      undefined,
+      (name) =>
+        name === "CHROMA_TENANT"
+          ? "tenant-uuid"
+          : name === "CHROMA_DATABASE"
+            ? "prod-db"
+            : undefined,
+    );
+
+    expect(state.connections[0]).toMatchObject({
+      tenant: "tenant-uuid",
+      database: "prod-db",
+      tenantRaw: "${CHROMA_TENANT}",
+      databaseRaw: "${CHROMA_DATABASE}",
+    });
+  });
+
+  test("quick-connect accepts chroma with api_key only", () => {
+    expect(
+      parseCliConnection(["--provider", "chroma", "--api-key", "ck-secret", "--tenant", "t1"]),
+    ).toEqual({
+      id: "cli-chroma",
+      name: "cli-chroma",
+      provider: "chroma",
+      apiKey: "ck-secret",
+      tenant: "t1",
+      description: "Provided by CLI flags",
+      source: "cli",
+    });
+  });
+
+  test("quick-connect chroma requires url or api_key", () => {
+    expect(() => parseCliConnection(["--provider", "chroma"])).toThrow(
+      /--url or --api-key for provider "chroma"/,
+    );
+  });
+
+  test("quick-connect rejects --tenant on non-chroma providers", () => {
+    expect(() =>
+      parseCliConnection(["--provider", "qdrant", "--url", "http://localhost:6333", "--tenant", "x"]),
+    ).toThrow(/--tenant and --database are only valid for provider "chroma"/);
+  });
+
   test("missing env var referenced from api_key fails parse", () => {
     expect(() =>
       parseConfigText(

@@ -133,6 +133,24 @@ url = "http://existing:6333"
     expect(connections.local).not.toHaveProperty("api_key");
   });
 
+  test("persists chroma tenant and database", async () => {
+    const configPath = await setup("");
+
+    await addConnectionToConfig(
+      { name: "chroma-cloud", provider: "chroma", apiKey: "ck-x", tenant: "t-1", database: "db-prod" },
+      configPath,
+    );
+
+    const config = await readTomlAsync(configPath);
+    const connections = config.connections as Record<string, Record<string, string>>;
+    expect(connections["chroma-cloud"]).toEqual({
+      provider: "chroma",
+      api_key: "ck-x",
+      tenant: "t-1",
+      database: "db-prod",
+    });
+  });
+
   test("rejects duplicate name", async () => {
     const configPath = await setup(`
 [connections.local]

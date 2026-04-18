@@ -224,6 +224,8 @@ export function useAppKeyboard({
             provider: selectedConnection.provider,
             url: selectedConnection.urlRaw ?? selectedConnection.url ?? "",
             apiKey: selectedConnection.apiKeyRaw ?? selectedConnection.apiKey ?? "",
+            tenant: selectedConnection.tenantRaw ?? selectedConnection.tenant ?? "",
+            database: selectedConnection.databaseRaw ?? selectedConnection.database ?? "",
           },
         });
         return;

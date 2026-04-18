@@ -16,7 +16,7 @@ interface RawLazyvecConfig {
   connections?: unknown;
 }
 
-const supportedProviders = new Set<Provider>(["qdrant", "pinecone"]);
+const supportedProviders = new Set<Provider>(["qdrant", "pinecone", "chroma"]);
 const urlRequiredProviders = new Set<Provider>(["qdrant"]);
 
 export function buildConnectionState({
@@ -79,8 +79,10 @@ export function parseCliConnection(argv: string[]): ConnectionProfile | null {
   const provider = readFlag(argv, "--provider", "-p");
   const url = readFlag(argv, "--url", "-u");
   const apiKey = readFlag(argv, "--api-key", "-k");
+  const tenant = readFlag(argv, "--tenant", "-t");
+  const database = readFlag(argv, "--database", "-d");
 
-  if (provider === null && url === null && apiKey === null) {
+  if (provider === null && url === null && apiKey === null && tenant === null && database === null) {
     return null;
   }
 
@@ -98,12 +100,22 @@ export function parseCliConnection(argv: string[]): ConnectionProfile | null {
     throw new Error('Quick connect requires --api-key for provider "pinecone"');
   }
 
+  if (normalizedProvider === "chroma" && url === null && apiKey === null) {
+    throw new Error('Quick connect requires --url or --api-key for provider "chroma"');
+  }
+
+  if (normalizedProvider !== "chroma" && (tenant !== null || database !== null)) {
+    throw new Error(`--tenant and --database are only valid for provider "chroma"`);
+  }
+
   return {
     id: `cli-${normalizedProvider}`,
     name: `cli-${normalizedProvider}`,
     provider: normalizedProvider,
     ...(url === null ? {} : { url }),
     ...(apiKey === null ? {} : { apiKey }),
+    ...(tenant === null ? {} : { tenant }),
+    ...(database === null ? {} : { database }),
     description: "Provided by CLI flags",
     source: "cli",
   };
@@ -119,9 +131,19 @@ function parseConfigConnection(
   const context = `Connection "${name}"`;
   const url = parseOptionalUrl(provider, rawConnection.url, name, envGetter);
   const apiKey = parseOptionalApiKey(rawConnection.api_key, context, envGetter);
+  const tenant = parseOptionalPlain(rawConnection.tenant, `${context} tenant`, envGetter);
+  const database = parseOptionalPlain(rawConnection.database, `${context} database`, envGetter);
 
   if (provider === "pinecone" && apiKey === undefined) {
     throw new Error(`Connection "${name}" must include api_key for provider "pinecone"`);
+  }
+
+  if (provider === "chroma" && url === undefined && apiKey === undefined) {
+    throw new Error(`Connection "${name}" must include a url or api_key for provider "chroma"`);
+  }
+
+  if (provider !== "chroma" && (tenant !== undefined || database !== undefined)) {
+    throw new Error(`Connection "${name}" tenant/database are only valid for provider "chroma"`);
   }
 
   return {
@@ -130,8 +152,12 @@ function parseConfigConnection(
     provider,
     ...(url === undefined ? {} : { url: url.value }),
     ...(apiKey === undefined ? {} : { apiKey: apiKey.value }),
+    ...(tenant === undefined ? {} : { tenant: tenant.value }),
+    ...(database === undefined ? {} : { database: database.value }),
     ...(url?.raw !== undefined ? { urlRaw: url.raw } : {}),
     ...(apiKey?.raw !== undefined ? { apiKeyRaw: apiKey.raw } : {}),
+    ...(tenant?.raw !== undefined ? { tenantRaw: tenant.raw } : {}),
+    ...(database?.raw !== undefined ? { databaseRaw: database.raw } : {}),
     description: `Configured in ${displayPath}`,
     source: "config",
   };
@@ -172,6 +198,20 @@ function parseOptionalApiKey(
   const { value, interpolated } = interpolateEnvVars(rawString, envGetter, `${context} api_key`);
   if (value.length === 0) {
     throw new Error(`${context} api_key must be a non-empty string`);
+  }
+  return interpolated ? { value, raw: rawString } : { value };
+}
+
+function parseOptionalPlain(
+  raw: unknown,
+  context: string,
+  envGetter: EnvGetter,
+): ResolvedField | undefined {
+  if (raw === undefined) return undefined;
+  const rawString = expectString(raw, `${context} must be a non-empty string`);
+  const { value, interpolated } = interpolateEnvVars(rawString, envGetter, context);
+  if (value.length === 0) {
+    throw new Error(`${context} must be a non-empty string`);
   }
   return interpolated ? { value, raw: rawString } : { value };
 }

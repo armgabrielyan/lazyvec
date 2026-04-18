@@ -24,6 +24,7 @@ import { inspectorRecordForSelection } from "./layout/inspector";
 import { parseFilterInput } from "./filter/parse";
 import { shouldShowStatusBar } from "./layout/view-state";
 import { appReducer, createInitialState, defaultPageSize, reachabilityPollIntervalMs, routePaste, searchLimit, type AppProps } from "./state/app-state";
+import type { Provider } from "./types";
 import { useAppKeyboard } from "./use-app-keyboard";
 
 export { appReducer, createInitialState } from "./state/app-state";
@@ -366,11 +367,24 @@ export function App({
       return;
     }
 
-    const provider = fields.provider as "qdrant" | "pinecone";
+    const provider = fields.provider as Provider;
+
     if (provider === "pinecone") {
       if (fields.apiKey.length === 0) {
         dispatch({ type: "SET_CONNECTION_FORM_ERROR", error: "API Key is required for Pinecone" });
         return;
+      }
+    } else if (provider === "chroma") {
+      if (fields.url.length === 0 && fields.apiKey.length === 0) {
+        dispatch({ type: "SET_CONNECTION_FORM_ERROR", error: "Chroma requires a URL or API Key" });
+        return;
+      }
+      if (fields.url.length > 0) {
+        const urlError = validateConnectionUrl(fields.url);
+        if (urlError) {
+          dispatch({ type: "SET_CONNECTION_FORM_ERROR", error: urlError });
+          return;
+        }
       }
     } else {
       const urlError = validateConnectionUrl(fields.url);
@@ -385,6 +399,8 @@ export function App({
       provider,
       ...(provider !== "pinecone" && fields.url.length > 0 ? { url: fields.url } : {}),
       ...(fields.apiKey.length > 0 ? { apiKey: fields.apiKey } : {}),
+      ...(provider === "chroma" && fields.tenant.length > 0 ? { tenant: fields.tenant } : {}),
+      ...(provider === "chroma" && fields.database.length > 0 ? { database: fields.database } : {}),
     };
     const cliConnections = connections.filter((c) => c.source === "cli");
 
