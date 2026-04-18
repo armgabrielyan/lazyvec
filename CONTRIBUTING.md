@@ -239,55 +239,68 @@ Out-of-date docs are treated as a bug.
 
 ## 🚢 Release Process
 
-Releases are triggered by pushing a `vX.Y.Z` tag. A tag push runs
-[`.github/workflows/release.yml`](./.github/workflows/release.yml), which:
+Releases are **fully automated** via [release-please](https://github.com/googleapis/release-please).
+As a contributor you don't cut releases manually — you just commit
+[Conventional Commits](#-commit-messages) and merge the Release PR when the
+maintainer opens it.
 
-1. Cross-compiles prebuilt binaries with `bun build --compile` for five targets
-   (`linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`, `windows-x64`).
-2. Packages each as a tarball (or zip for Windows) and uploads it.
-3. Generates release notes from Conventional Commits via
-   [`git-cliff`](https://git-cliff.org/) using [`cliff.toml`](./cliff.toml).
-4. Creates the GitHub Release with the binaries + `SHA256SUMS.txt` attached.
-5. Publishes the [npm wrapper](./npm) — its `postinstall` downloads the binary matching
-   `package.json#version` from the GitHub Release.
+### The flow
 
-### Cutting a release
-
-```bash
-# 1. Make sure main is clean and CI is green.
-git checkout main && git pull
-
-# 2. Bump the version in package.json (no commit, no tag yet).
-VERSION=0.2.0
-bun x npm version "$VERSION" --no-git-tag-version
-
-# 3. Regenerate CHANGELOG.md from the tags.
-bunx git-cliff --tag "v$VERSION" -o CHANGELOG.md
-
-# 4. Commit + tag.
-git add package.json CHANGELOG.md
-git commit -m "chore(release): v$VERSION"
-git tag -a "v$VERSION" -m "Release v$VERSION"
-
-# 5. Push — the Release workflow takes over.
-git push origin main
-git push origin "v$VERSION"
+```
+ main (feat, fix, ...)        [release-please.yml watches main]
+        │
+        ▼
+ Release PR is opened ────── bumps package.json + npm/package.json,
+ "chore(main): release X.Y.Z"  updates CHANGELOG.md from Conventional Commits
+        │
+        │ (maintainer merges)
+        ▼
+ tag vX.Y.Z is pushed  ───── release-please creates the GitHub Release
+        │
+        ▼
+ release.yml runs      ───── cross-compiles 5 binaries, attaches them +
+                              SHA256SUMS.txt to the existing Release,
+                              publishes npm/ with provenance
 ```
 
-### Credentials the workflow needs
+### Contributor checklist
 
-| Credential | Purpose |
-|------------|---------|
-| `GITHUB_TOKEN` | Provided automatically; used by `softprops/action-gh-release` |
-| npm trusted publisher | OIDC-based; no secret required (see setup below) |
+1. Use Conventional Commit prefixes (`feat`, `fix`, `perf`, `deps`, …).
+2. Merge PRs into `main` normally. A "chore(main): release X.Y.Z" PR will
+   appear/update itself — don't worry about it unless you're cutting a release.
 
-#### npm trusted publisher (one-time setup)
+### Maintainer: cutting a release
 
-npm supports short-lived OIDC tokens in place of long-lived automation tokens.
-The workflow uses this via `npm publish --provenance` + `id-token: write`, which
-means **no `NPM_TOKEN` secret is needed** at the repo level.
+1. Wait for the **Release PR** to reflect everything you want to ship. Its
+   proposed version (SemVer) is derived from the commits since the last tag
+   (`feat` → minor, `fix` → patch, `!` or `BREAKING CHANGE` → major).
+2. Merge it. release-please will tag `vX.Y.Z` and create the GitHub Release
+   with the generated notes.
+3. Watch the **Actions** tab: `release.yml` runs on the tag push, attaches
+   binaries + `SHA256SUMS.txt`, and publishes to npm with provenance.
+4. Sanity-check the GitHub Release (5 archives + SHA256SUMS.txt attached) and
+   the npmjs package page (new version with a green provenance badge).
 
-Register the trusted publisher on npmjs.com:
+### One-time setup
+
+#### `RELEASE_PLEASE_TOKEN` secret
+
+The default `GITHUB_TOKEN` cannot trigger other workflows — so a tag push from
+release-please using `GITHUB_TOKEN` would not fire `release.yml`. release-please
+therefore needs a Personal Access Token (or GitHub App token) instead.
+
+1. **Settings → Developer settings → Personal access tokens → Fine-grained tokens**.
+2. Scope it to the `lazyvec` repo with permissions:
+   - Contents: Read and write
+   - Pull requests: Read and write
+   - Issues: Read and write
+3. Add it as `RELEASE_PLEASE_TOKEN` at **Repo → Settings → Secrets and variables → Actions**.
+
+#### npm trusted publisher
+
+npm supports short-lived OIDC tokens in place of long-lived automation tokens,
+so **no `NPM_TOKEN` secret is needed**. The workflow uses
+`npm publish --provenance` with `id-token: write`.
 
 1. Sign in to [npmjs.com](https://www.npmjs.com/) and open the `lazyvec` package page.
 2. **Settings → Trusted Publishers → Add Publisher**.
@@ -299,15 +312,11 @@ Register the trusted publisher on npmjs.com:
    - Environment: *(leave blank)*
 4. Save.
 
-Publishes from the release workflow will now mint an OIDC token at runtime,
-authenticate against npm, and attach a provenance statement visible on the
-package page (a green "Published via GitHub Actions" badge).
+If `lazyvec` has never been published to npm, do one manual publish locally first:
+`cd npm && npm login && npm publish --access public`. Subsequent releases go
+through Actions automatically.
 
-If the package has never been published, do the first release from your local
-machine with `cd npm && npm publish --access public` after running `npm login`;
-subsequent releases will go through Actions automatically.
-
-### Branch protection
+#### Branch protection
 
 `main` should require:
 
@@ -316,3 +325,17 @@ subsequent releases will go through Actions automatically.
 - Linear history (optional but recommended)
 
 Configure under **Settings → Branches → Branch protection rules** for `main`.
+
+### Configuration files
+
+| File | Purpose |
+|------|---------|
+| [`release-please-config.json`](./release-please-config.json) | release-please config — release type, changelog sections, `npm/package.json` version sync |
+| [`.release-please-manifest.json`](./.release-please-manifest.json) | Tracks the last released version per package |
+| [`.github/workflows/release-please.yml`](./.github/workflows/release-please.yml) | Opens/updates the Release PR, tags on merge |
+| [`.github/workflows/release.yml`](./.github/workflows/release.yml) | Builds binaries + attaches to Release + `npm publish` |
+
+### Forcing a specific bump
+
+Add a `Release-As: X.Y.Z` footer to a commit if release-please picks the wrong
+version, or add `BREAKING CHANGE:` to force a major bump.

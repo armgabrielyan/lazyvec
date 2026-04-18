@@ -64,27 +64,11 @@ jobs:
           name: ${{ matrix.target.name }}
           path: lazyvec-*
 
-  release:
-    name: Publish GitHub Release
+  attach-assets:
+    name: Attach assets to the Release
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install git-cliff
-        run: bun install -g git-cliff
-
-      - name: Generate release notes
-        run: git-cliff --tag "$GITHUB_REF_NAME" --strip header -o RELEASE_NOTES.md
-
       - name: Download artifacts
         uses: actions/download-artifact@v8
         with:
@@ -95,17 +79,18 @@ jobs:
         working-directory: artifacts
         run: sha256sum lazyvec-* > SHA256SUMS.txt
 
-      - name: Create GitHub Release
+      # release-please already created the GitHub Release with notes; this
+      # step just appends our prebuilt binaries + checksums to it.
+      - name: Upload binaries to existing Release
         uses: softprops/action-gh-release@v3
         with:
-          body_path: RELEASE_NOTES.md
           files: |
             artifacts/lazyvec-*
             artifacts/SHA256SUMS.txt
 
   npm-publish:
     name: Publish to npm
-    needs: release
+    needs: attach-assets
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -120,12 +105,8 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Sync wrapper version
-        working-directory: npm
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          npm version "$VERSION" --no-git-tag-version --allow-same-version
-
+      # The npm/package.json version is already in sync at this commit
+      # (release-please bumped it as part of the Release PR).
       - name: Publish (with provenance)
         working-directory: npm
         run: npm publish --access public --provenance
