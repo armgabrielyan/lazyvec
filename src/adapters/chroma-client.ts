@@ -186,11 +186,15 @@ export function createChromaClient(config: ConnectionProfile): ChromaClientLike 
   };
 }
 
-interface RawCollection {
+export interface RawCollection {
   id: string;
   name: string;
   configuration?: unknown;
   metadata?: unknown;
+}
+
+export function toChromaSummary(collection: RawCollection): ChromaCollectionSummary {
+  return toSummary(collection);
 }
 
 function toSummary(collection: RawCollection): ChromaCollectionSummary {
@@ -217,7 +221,12 @@ function extractMetric(
   metadata: Record<string, unknown>,
 ): VectorMetric {
   const hnsw = toRecord(configuration.hnsw);
-  const space = typeof hnsw.space === "string" ? hnsw.space : metadata["hnsw:space"];
+  const spann = toRecord(configuration.spann);
+  const space = typeof hnsw.space === "string"
+    ? hnsw.space
+    : typeof spann.space === "string"
+      ? spann.space
+      : metadata["hnsw:space"] ?? metadata["spann:space"];
   return normalizeMetric(space);
 }
 

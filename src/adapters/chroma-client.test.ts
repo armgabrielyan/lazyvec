@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseChromaConnection } from "./chroma-client";
+import { parseChromaConnection, toChromaSummary } from "./chroma-client";
 import type { ConnectionProfile } from "../types";
 
 const base: ConnectionProfile = {
@@ -70,5 +70,47 @@ describe("parseChromaConnection", () => {
       database: "d",
     });
     expect(opts).toMatchObject({ mode: "local", tenant: "t", database: "d" });
+  });
+});
+
+describe("toChromaSummary", () => {
+  test("reads metric from HNSW configuration", () => {
+    const summary = toChromaSummary({
+      id: "c1",
+      name: "movies",
+      configuration: { hnsw: { space: "cosine" } },
+      metadata: {},
+    });
+    expect(summary.metric).toBe("cosine");
+  });
+
+  test("reads metric from SPANN configuration (Cloud default index)", () => {
+    const summary = toChromaSummary({
+      id: "c2",
+      name: "support",
+      configuration: { spann: { space: "l2" } },
+      metadata: {},
+    });
+    expect(summary.metric).toBe("euclidean");
+  });
+
+  test("falls back to metadata when configuration is empty", () => {
+    const summary = toChromaSummary({
+      id: "c3",
+      name: "legacy",
+      configuration: {},
+      metadata: { "hnsw:space": "ip" },
+    });
+    expect(summary.metric).toBe("dotproduct");
+  });
+
+  test("returns unknown when no space is set anywhere", () => {
+    const summary = toChromaSummary({
+      id: "c4",
+      name: "bare",
+      configuration: {},
+      metadata: {},
+    });
+    expect(summary.metric).toBe("unknown");
   });
 });
