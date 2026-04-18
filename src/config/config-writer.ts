@@ -7,7 +7,7 @@ import { defaultConfigPath } from "./paths";
 export interface ConnectionInput {
   name: string;
   provider: Provider;
-  url: string;
+  url?: string;
   apiKey?: string;
 }
 
@@ -31,7 +31,7 @@ export function validateConnectionUrl(url: string): string | null {
 
 interface RawConnection {
   provider: string;
-  url: string;
+  url?: string;
   api_key?: string;
 }
 
@@ -43,7 +43,7 @@ interface RawConfig {
 function toRawConnection(input: ConnectionInput): RawConnection {
   return {
     provider: input.provider,
-    url: input.url,
+    ...(input.url ? { url: input.url } : {}),
     ...(input.apiKey ? { api_key: input.apiKey } : {}),
   };
 }

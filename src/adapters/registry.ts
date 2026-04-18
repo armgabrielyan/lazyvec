@@ -1,5 +1,6 @@
 import type { ConnectionProfile, Provider } from "../types";
 import { QdrantAdapter } from "./qdrant";
+import { PineconeAdapter } from "./pinecone";
 import type { VectorDBAdapter } from "./types";
 
 export type AdapterFactory = () => VectorDBAdapter;
@@ -7,6 +8,7 @@ export type AdapterFactories = Partial<Record<Provider, AdapterFactory>>;
 
 const defaultFactories: Record<Provider, AdapterFactory> = {
   qdrant: () => new QdrantAdapter(),
+  pinecone: () => new PineconeAdapter(),
 };
 
 export async function createAdapter(

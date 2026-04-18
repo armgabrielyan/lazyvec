@@ -77,6 +77,9 @@ export interface QdrantClientOptions {
 }
 
 export function buildQdrantClientOptions(config: ConnectionProfile): QdrantClientOptions {
+  if (!config.url) {
+    throw new Error(`Qdrant connection "${config.name}" requires a url`);
+  }
   return {
     url: config.url,
     ...(config.apiKey ? { apiKey: config.apiKey } : {}),

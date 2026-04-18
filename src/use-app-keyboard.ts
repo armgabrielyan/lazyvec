@@ -109,8 +109,13 @@ export function useAppKeyboard({
         saveConnection();
       } else if (key.name === "tab") {
         dispatch({ type: "CYCLE_CONNECTION_FORM_FOCUS", delta: key.shift ? -1 : 1 });
-      } else if (fieldIndex !== 1) {
-        // Provider field is read-only; key events are intentionally dropped
+      } else if (fieldIndex === 1) {
+        if (key.name === "left" || key.name === "h") {
+          dispatch({ type: "CYCLE_CONNECTION_FORM_PROVIDER", delta: -1 });
+        } else if (key.name === "right" || key.name === "l" || key.name === "space") {
+          dispatch({ type: "CYCLE_CONNECTION_FORM_PROVIDER", delta: 1 });
+        }
+      } else {
         const edit = applyTextEditKey(key, value, cursor, fieldMaxLength);
         if (edit) {
           dispatch({ type: "UPDATE_CONNECTION_FORM_FIELD", fieldIndex, value: edit.value, cursor: edit.cursor });
@@ -217,7 +222,7 @@ export function useAppKeyboard({
           fields: {
             name: selectedConnection.name,
             provider: selectedConnection.provider,
-            url: selectedConnection.url,
+            url: selectedConnection.url ?? "",
             apiKey: selectedConnection.apiKey ?? "",
           },
         });

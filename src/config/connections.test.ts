@@ -64,11 +64,39 @@ describe("connection config", () => {
   test("rejects unsupported providers", () => {
     expect(() =>
       parseConfigText(`
-        [connections.prod-pinecone]
-        provider = "pinecone"
-        api_key_env = "PINECONE_API_KEY"
+        [connections.prod-weaviate]
+        provider = "weaviate"
+        url = "http://localhost:8080"
       `),
-    ).toThrow('Connection "prod-pinecone" uses unsupported provider "pinecone"');
+    ).toThrow('Connection "prod-weaviate" uses unsupported provider "weaviate"');
+  });
+
+  test("parses Pinecone connections without a url", () => {
+    const state = parseConfigText(`
+      [connections.cloud-pinecone]
+      provider = "pinecone"
+      api_key = "pcsk-secret"
+    `);
+
+    expect(state.connections).toEqual([
+      {
+        id: "cloud-pinecone",
+        name: "cloud-pinecone",
+        provider: "pinecone",
+        apiKey: "pcsk-secret",
+        description: "Configured in ~/.lazyvec/config.toml",
+        source: "config",
+      },
+    ]);
+  });
+
+  test("Pinecone connections require an api_key", () => {
+    expect(() =>
+      parseConfigText(`
+        [connections.cloud-pinecone]
+        provider = "pinecone"
+      `),
+    ).toThrow('Connection "cloud-pinecone" must include api_key for provider "pinecone"');
   });
 
   test("parses api_key for Qdrant Cloud connections", () => {

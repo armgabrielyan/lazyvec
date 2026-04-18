@@ -95,7 +95,7 @@ describe("createAdapter", () => {
 
   test("fails clearly for unsupported providers", async () => {
     await expect(
-      createAdapter({ ...qdrantConnection, provider: "pinecone" as "qdrant" }),
-    ).rejects.toThrow("Unknown provider: pinecone");
+      createAdapter({ ...qdrantConnection, provider: "weaviate" as "qdrant" }),
+    ).rejects.toThrow("Unknown provider: weaviate");
   });
 });

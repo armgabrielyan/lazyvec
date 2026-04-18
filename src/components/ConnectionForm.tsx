@@ -21,11 +21,19 @@ export interface ConnectionFormProps {
 
 export const connectionFormFieldKeys: (keyof ConnectionFormFields)[] = ["name", "provider", "url", "apiKey"];
 
-const fieldLabels = ["Name:", "Provider:", "URL:", "API Key:"];
 const labelWidth = 10;
 const fieldWidth = 80;
 const formWidth = labelWidth + fieldWidth + 8;
 export const fieldMaxLength = 2048;
+
+const fieldLabels = ["Name:", "Provider:", "URL:", "API Key:"];
+
+function hintFor(fields: ConnectionFormFields): string {
+  if (fields.provider === "pinecone") {
+    return "Tab: next  Enter: save  Esc: cancel  (URL unused, API Key required)";
+  }
+  return "Tab: next  Enter: save  Esc: cancel";
+}
 
 function TextInputField({ value, cursor, focused }: { value: string; cursor: number; focused: boolean }) {
   const { visible, localCursor } = visibleTextWindow(value, cursor, fieldWidth - 1);
@@ -51,13 +59,18 @@ function TextInputField({ value, cursor, focused }: { value: string; cursor: num
   );
 }
 
-function ReadOnlyField({ value, focused }: { value: string; focused: boolean }) {
+function ProviderField({ value, focused }: { value: string; focused: boolean }) {
   const borderColor = focused ? colors.accent : colors.border;
-  const display = `${value}${" ".repeat(Math.max(0, fieldWidth - value.length))}`;
+  const leftArrow = focused ? "< " : "  ";
+  const rightArrow = focused ? " >" : "  ";
+  const inner = `${leftArrow}${value}${rightArrow}`;
+  const padLength = Math.max(0, fieldWidth - inner.length);
+  const display = `${inner}${" ".repeat(padLength)}`;
+  const fg = focused ? colors.text : colors.muted;
 
   return (
     <box flexDirection="row" border borderColor={borderColor} height={3} width={fieldWidth + 2}>
-      <text fg={colors.muted} bg={colors.statusBg}>{display}</text>
+      <text fg={fg} bg={colors.statusBg}>{display}</text>
     </box>
   );
 }
@@ -79,16 +92,16 @@ export function ConnectionForm({ mode, fields, focusedField, cursors, error }: C
       <text fg={colors.accent}>{title}</text>
       <text> </text>
 
-      {fieldLabels.map((label, index) => (
-        <box key={label} flexDirection="row" alignItems="center" height={3}>
+      {connectionFormFieldKeys.map((key, index) => (
+        <box key={key} flexDirection="row" alignItems="center" height={3}>
           <text fg={focusedField === index ? colors.accent : colors.muted}>
-            {label.padEnd(labelWidth)}
+            {(fieldLabels[index] ?? "").padEnd(labelWidth)}
           </text>
           {index === 1 ? (
-            <ReadOnlyField value={fields.provider} focused={focusedField === index} />
+            <ProviderField value={fields.provider} focused={focusedField === index} />
           ) : (
             <TextInputField
-              value={fields[connectionFormFieldKeys[index]!]}
+              value={fields[key]}
               cursor={cursors[index] ?? 0}
               focused={focusedField === index}
             />
@@ -98,7 +111,7 @@ export function ConnectionForm({ mode, fields, focusedField, cursors, error }: C
 
       <text> </text>
       {error ? <text fg={colors.error}>{error}</text> : null}
-      <text fg={colors.muted}>Tab: next field  Enter: save  Esc: cancel</text>
+      <text fg={colors.muted}>{hintFor(fields)}</text>
     </box>
   );
 }

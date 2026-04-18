@@ -7,7 +7,9 @@ import { defaultCollectionPanelWidth, resizeCollectionPanelWidth } from "../layo
 import { inferTableSchema, type TableSchema } from "../layout/metadata-schema";
 import type { FilterCondition } from "../filter/parse";
 import { formatFilterSummary } from "../filter/parse";
-import type { ConnectionFormMode, ConnectionProfile, ConnectionState, ConnectionStatus, Panel, RightTab, Screen } from "../types";
+import type { ConnectionFormMode, ConnectionProfile, ConnectionState, ConnectionStatus, Panel, Provider, RightTab, Screen } from "../types";
+
+export const selectableProviders: Provider[] = ["qdrant", "pinecone"];
 
 export const panelOrder: Panel[] = ["collections", "records", "inspector"];
 
@@ -199,6 +201,7 @@ export type AppAction =
   | { type: "CLOSE_CONNECTION_FORM" }
   | { type: "UPDATE_CONNECTION_FORM_FIELD"; fieldIndex: number; value: string; cursor: number }
   | { type: "CYCLE_CONNECTION_FORM_FOCUS"; delta: number }
+  | { type: "CYCLE_CONNECTION_FORM_PROVIDER"; delta: number }
   | { type: "SET_CONNECTION_FORM_ERROR"; error: string }
   | { type: "SAVE_CONNECTION_SUCCESS"; connections: ConnectionProfile[] }
   | { type: "OPEN_CONNECTION_DELETE_CONFIRM" }
@@ -759,6 +762,18 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         connectionFormFocusedField: next,
+      };
+    }
+
+    case "CYCLE_CONNECTION_FORM_PROVIDER": {
+      const providers = selectableProviders;
+      const current = providers.indexOf(state.connectionFormFields.provider as Provider);
+      const base = current === -1 ? 0 : current;
+      const next = (base + action.delta + providers.length) % providers.length;
+      return {
+        ...state,
+        connectionFormFields: { ...state.connectionFormFields, provider: providers[next]! },
+        connectionFormError: null,
       };
     }
 

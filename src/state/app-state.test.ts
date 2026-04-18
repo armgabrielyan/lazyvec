@@ -146,6 +146,18 @@ describe("connection form reducer", () => {
     expect(afterFour.connectionFormFocusedField).toBe(0);
   });
 
+  test("CYCLE_CONNECTION_FORM_PROVIDER toggles between qdrant and pinecone", () => {
+    const opened = formOpenedState();
+    const next = appReducer(opened, { type: "CYCLE_CONNECTION_FORM_PROVIDER", delta: 1 });
+    expect(next.connectionFormFields.provider).toBe("pinecone");
+
+    const wrapped = appReducer(next, { type: "CYCLE_CONNECTION_FORM_PROVIDER", delta: 1 });
+    expect(wrapped.connectionFormFields.provider).toBe("qdrant");
+
+    const back = appReducer(next, { type: "CYCLE_CONNECTION_FORM_PROVIDER", delta: -1 });
+    expect(back.connectionFormFields.provider).toBe("qdrant");
+  });
+
   test("UPDATE_CONNECTION_FORM_FIELD can set apiKey at index 3", () => {
     const opened = formOpenedState();
     const updated = appReducer(opened, {

@@ -14,7 +14,8 @@ interface RawLazyvecConfig {
   connections?: unknown;
 }
 
-const supportedProviders = new Set<Provider>(["qdrant"]);
+const supportedProviders = new Set<Provider>(["qdrant", "pinecone"]);
+const urlRequiredProviders = new Set<Provider>(["qdrant"]);
 
 export function buildConnectionState({
   argv,
@@ -70,22 +71,32 @@ export function parseConfigText(configText: string, displayPath = displayConfigP
 export function parseCliConnection(argv: string[]): ConnectionProfile | null {
   const provider = readFlag(argv, "--provider", "-p");
   const url = readFlag(argv, "--url", "-u");
+  const apiKey = readFlag(argv, "--api-key", "-k");
 
-  if (provider === null && url === null) {
+  if (provider === null && url === null && apiKey === null) {
     return null;
   }
 
-  if (provider === null || url === null) {
-    throw new Error("Quick connect requires both --provider and --url");
+  if (provider === null) {
+    throw new Error("Quick connect requires --provider");
   }
 
   const normalizedProvider = parseProvider(provider, "CLI quick-connect");
+
+  if (urlRequiredProviders.has(normalizedProvider) && url === null) {
+    throw new Error(`Quick connect requires --url for provider "${normalizedProvider}"`);
+  }
+
+  if (normalizedProvider === "pinecone" && apiKey === null) {
+    throw new Error('Quick connect requires --api-key for provider "pinecone"');
+  }
 
   return {
     id: `cli-${normalizedProvider}`,
     name: `cli-${normalizedProvider}`,
     provider: normalizedProvider,
-    url,
+    ...(url === null ? {} : { url }),
+    ...(apiKey === null ? {} : { apiKey }),
     description: "Provided by CLI flags",
     source: "cli",
   };
@@ -97,20 +108,34 @@ function parseConfigConnection(
   displayPath: string,
 ): ConnectionProfile {
   const provider = parseProvider(rawConnection.provider, `Connection "${name}"`);
-  const url = expectString(rawConnection.url, `Connection "${name}" must include a url`);
+  const url = parseOptionalUrl(provider, rawConnection.url, name);
   const apiKey = rawConnection.api_key === undefined
     ? undefined
     : expectString(rawConnection.api_key, `Connection "${name}" api_key must be a non-empty string`);
+
+  if (provider === "pinecone" && apiKey === undefined) {
+    throw new Error(`Connection "${name}" must include api_key for provider "pinecone"`);
+  }
 
   return {
     id: name,
     name,
     provider,
-    url,
+    ...(url === undefined ? {} : { url }),
     ...(apiKey === undefined ? {} : { apiKey }),
     description: `Configured in ${displayPath}`,
     source: "config",
   };
+}
+
+function parseOptionalUrl(provider: Provider, raw: unknown, name: string): string | undefined {
+  if (raw === undefined) {
+    if (urlRequiredProviders.has(provider)) {
+      throw new Error(`Connection "${name}" must include a url`);
+    }
+    return undefined;
+  }
+  return expectString(raw, `Connection "${name}" must include a url`);
 }
 
 function parseProvider(value: unknown, context: string): Provider {

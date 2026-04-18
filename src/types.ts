@@ -1,4 +1,4 @@
-export type Provider = "qdrant";
+export type Provider = "qdrant" | "pinecone";
 
 export type Screen = "connections" | "main";
 
@@ -14,7 +14,7 @@ export interface ConnectionProfile {
   id: string;
   name: string;
   provider: Provider;
-  url: string;
+  url?: string;
   apiKey?: string;
   description: string;
   source: ConnectionSource;

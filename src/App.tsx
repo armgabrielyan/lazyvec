@@ -366,16 +366,24 @@ export function App({
       return;
     }
 
-    const urlError = validateConnectionUrl(fields.url);
-    if (urlError) {
-      dispatch({ type: "SET_CONNECTION_FORM_ERROR", error: urlError });
-      return;
+    const provider = fields.provider as "qdrant" | "pinecone";
+    if (provider === "pinecone") {
+      if (fields.apiKey.length === 0) {
+        dispatch({ type: "SET_CONNECTION_FORM_ERROR", error: "API Key is required for Pinecone" });
+        return;
+      }
+    } else {
+      const urlError = validateConnectionUrl(fields.url);
+      if (urlError) {
+        dispatch({ type: "SET_CONNECTION_FORM_ERROR", error: urlError });
+        return;
+      }
     }
 
     const input = {
       name: fields.name,
-      provider: fields.provider as "qdrant",
-      url: fields.url,
+      provider,
+      ...(provider !== "pinecone" && fields.url.length > 0 ? { url: fields.url } : {}),
       ...(fields.apiKey.length > 0 ? { apiKey: fields.apiKey } : {}),
     };
     const cliConnections = connections.filter((c) => c.source === "cli");

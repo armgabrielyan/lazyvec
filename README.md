@@ -2,7 +2,7 @@
 
 A terminal UI for browsing and inspecting vector databases.
 
-Built with OpenTUI React and Bun. Currently supports Qdrant. Start with a connection picker,
+Built with OpenTUI React and Bun. Supports Qdrant and Pinecone. Start with a connection picker,
 browse collections and records, inspect metadata and vectors, search for similar records,
 and delete entries — all without leaving the terminal.
 
@@ -13,20 +13,37 @@ bun install
 bun run start
 ```
 
-With no config file, lazyvec shows setup guidance instead of assuming Qdrant is running locally.
-Add a connection at `~/.lazyvec/config.toml`:
+With no config file, lazyvec shows setup guidance instead of assuming a database is running locally.
+Add connections at `~/.lazyvec/config.toml`:
 
 ```toml
 [connections.local-qdrant]
 provider = "qdrant"
 url = "http://localhost:6333"
+
+[connections.cloud-pinecone]
+provider = "pinecone"
+api_key = "pcsk-..."
 ```
 
 Or use quick-connect flags:
 
 ```bash
 bun run start -- --provider qdrant --url http://localhost:6333
+bun run start -- --provider pinecone --api-key pcsk-...
 ```
+
+### Pinecone
+
+Pinecone support is serverless-only in this release. Pod-based indexes list in the collections
+pane, but opening one for browsing surfaces a clear error. Each `index/namespace` pair appears as
+a separate collection row; indexes with only the default namespace appear under the bare index
+name.
+
+Pinecone metadata filtering is not wired into the record-list filter bar yet — use `id:<value>`
+to look up a specific record. In the Add/Edit Connection form, focus the Provider field and use
+`←` / `→` (or `space`) to switch between `qdrant` and `pinecone`. Pinecone requires an API Key;
+the URL field is unused.
 
 ## Keys
 

@@ -6,20 +6,42 @@ export async function checkConnectionReachable(
   connection: ConnectionProfile,
   fetchImpl: typeof fetch = fetch,
 ): Promise<ConnectionStatus> {
+  const target = reachabilityTarget(connection);
+  if (target === null) {
+    return "unknown";
+  }
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
 
-    const headers: Record<string, string> = {};
-    if (connection.apiKey) {
-      headers["api-key"] = connection.apiKey;
-    }
-
-    const response = await fetchImpl(connection.url, { signal: controller.signal, headers });
+    const response = await fetchImpl(target.url, { signal: controller.signal, headers: target.headers });
     clearTimeout(timeout);
 
     return response.ok ? "reachable" : "unreachable";
   } catch {
     return "unreachable";
   }
+}
+
+interface ReachabilityTarget {
+  url: string;
+  headers: Record<string, string>;
+}
+
+function reachabilityTarget(connection: ConnectionProfile): ReachabilityTarget | null {
+  if (connection.provider === "pinecone") {
+    if (!connection.apiKey) return null;
+    return {
+      url: "https://api.pinecone.io/indexes",
+      headers: { "Api-Key": connection.apiKey, "X-Pinecone-API-Version": "2024-07" },
+    };
+  }
+
+  if (!connection.url) return null;
+  const headers: Record<string, string> = {};
+  if (connection.apiKey) {
+    headers["api-key"] = connection.apiKey;
+  }
+  return { url: connection.url, headers };
 }
