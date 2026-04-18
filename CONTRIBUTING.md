@@ -274,12 +274,38 @@ git push origin main
 git push origin "v$VERSION"
 ```
 
-### Secrets the workflow needs
+### Credentials the workflow needs
 
-| Secret | Purpose |
-|--------|---------|
-| `NPM_TOKEN` | Automation token for `npm publish`; set at the repo level |
+| Credential | Purpose |
+|------------|---------|
 | `GITHUB_TOKEN` | Provided automatically; used by `softprops/action-gh-release` |
+| npm trusted publisher | OIDC-based; no secret required (see setup below) |
+
+#### npm trusted publisher (one-time setup)
+
+npm supports short-lived OIDC tokens in place of long-lived automation tokens.
+The workflow uses this via `npm publish --provenance` + `id-token: write`, which
+means **no `NPM_TOKEN` secret is needed** at the repo level.
+
+Register the trusted publisher on npmjs.com:
+
+1. Sign in to [npmjs.com](https://www.npmjs.com/) and open the `lazyvec` package page.
+2. **Settings → Trusted Publishers → Add Publisher**.
+3. Fill in:
+   - Publisher: **GitHub Actions**
+   - Organization/user: `armgabrielyan`
+   - Repository: `lazyvec`
+   - Workflow filename: `release.yml`
+   - Environment: *(leave blank)*
+4. Save.
+
+Publishes from the release workflow will now mint an OIDC token at runtime,
+authenticate against npm, and attach a provenance statement visible on the
+package page (a green "Published via GitHub Actions" badge).
+
+If the package has never been published, do the first release from your local
+machine with `cd npm && npm publish --access public` after running `npm login`;
+subsequent releases will go through Actions automatically.
 
 ### Branch protection
 
