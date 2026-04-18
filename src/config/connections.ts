@@ -1,12 +1,14 @@
 import { parse } from "smol-toml";
 import type { ConnectionProfile, ConnectionState, Provider } from "../types";
 import { defaultConfigPath, displayConfigPath } from "./paths";
+import { defaultEnvGetter, interpolateEnvVars, type EnvGetter } from "./interpolate";
 
 interface BuildConnectionStateOptions {
   argv: string[];
   configPath?: string;
   configText: string | null;
   displayPath?: string;
+  envGetter?: EnvGetter;
 }
 
 interface RawLazyvecConfig {
@@ -21,8 +23,9 @@ export function buildConnectionState({
   argv,
   configText,
   displayPath = displayConfigPath,
+  envGetter = defaultEnvGetter,
 }: BuildConnectionStateOptions): ConnectionState {
-  const configState = configText === null ? null : parseConfigText(configText, displayPath);
+  const configState = configText === null ? null : parseConfigText(configText, displayPath, envGetter);
   const configConnections = configState?.connections ?? [];
   const defaultConnectionId = configState?.defaultConnectionId;
   const cliConnection = parseCliConnection(argv);
@@ -49,12 +52,16 @@ export async function loadConnectionState(argv: string[], configPath = defaultCo
   });
 }
 
-export function parseConfigText(configText: string, displayPath = displayConfigPath): ConnectionState {
+export function parseConfigText(
+  configText: string,
+  displayPath = displayConfigPath,
+  envGetter: EnvGetter = defaultEnvGetter,
+): ConnectionState {
   const rawConfig = parse(configText) as RawLazyvecConfig;
   const rawConnections =
     rawConfig.connections === undefined ? {} : toRecord(rawConfig.connections, "connections must be a table");
   const connections = Object.entries(rawConnections).map(([name, rawConnection]) =>
-    parseConfigConnection(name, toRecord(rawConnection, `Connection "${name}" must be a table`), displayPath),
+    parseConfigConnection(name, toRecord(rawConnection, `Connection "${name}" must be a table`), displayPath, envGetter),
   );
   const defaultConnectionId = rawConfig.default === undefined ? undefined : expectString(rawConfig.default, "default must be a string");
 
@@ -106,12 +113,12 @@ function parseConfigConnection(
   name: string,
   rawConnection: Record<string, unknown>,
   displayPath: string,
+  envGetter: EnvGetter,
 ): ConnectionProfile {
   const provider = parseProvider(rawConnection.provider, `Connection "${name}"`);
-  const url = parseOptionalUrl(provider, rawConnection.url, name);
-  const apiKey = rawConnection.api_key === undefined
-    ? undefined
-    : expectString(rawConnection.api_key, `Connection "${name}" api_key must be a non-empty string`);
+  const context = `Connection "${name}"`;
+  const url = parseOptionalUrl(provider, rawConnection.url, name, envGetter);
+  const apiKey = parseOptionalApiKey(rawConnection.api_key, context, envGetter);
 
   if (provider === "pinecone" && apiKey === undefined) {
     throw new Error(`Connection "${name}" must include api_key for provider "pinecone"`);
@@ -121,21 +128,52 @@ function parseConfigConnection(
     id: name,
     name,
     provider,
-    ...(url === undefined ? {} : { url }),
-    ...(apiKey === undefined ? {} : { apiKey }),
+    ...(url === undefined ? {} : { url: url.value }),
+    ...(apiKey === undefined ? {} : { apiKey: apiKey.value }),
+    ...(url?.raw !== undefined ? { urlRaw: url.raw } : {}),
+    ...(apiKey?.raw !== undefined ? { apiKeyRaw: apiKey.raw } : {}),
     description: `Configured in ${displayPath}`,
     source: "config",
   };
 }
 
-function parseOptionalUrl(provider: Provider, raw: unknown, name: string): string | undefined {
+interface ResolvedField {
+  value: string;
+  raw?: string;
+}
+
+function parseOptionalUrl(
+  provider: Provider,
+  raw: unknown,
+  name: string,
+  envGetter: EnvGetter,
+): ResolvedField | undefined {
   if (raw === undefined) {
     if (urlRequiredProviders.has(provider)) {
       throw new Error(`Connection "${name}" must include a url`);
     }
     return undefined;
   }
-  return expectString(raw, `Connection "${name}" must include a url`);
+  const rawString = expectString(raw, `Connection "${name}" must include a url`);
+  const { value, interpolated } = interpolateEnvVars(rawString, envGetter, `Connection "${name}" url`);
+  if (value.length === 0) {
+    throw new Error(`Connection "${name}" must include a url`);
+  }
+  return interpolated ? { value, raw: rawString } : { value };
+}
+
+function parseOptionalApiKey(
+  raw: unknown,
+  context: string,
+  envGetter: EnvGetter,
+): ResolvedField | undefined {
+  if (raw === undefined) return undefined;
+  const rawString = expectString(raw, `${context} api_key must be a non-empty string`);
+  const { value, interpolated } = interpolateEnvVars(rawString, envGetter, `${context} api_key`);
+  if (value.length === 0) {
+    throw new Error(`${context} api_key must be a non-empty string`);
+  }
+  return interpolated ? { value, raw: rawString } : { value };
 }
 
 function parseProvider(value: unknown, context: string): Provider {

@@ -159,4 +159,64 @@ describe("connection config", () => {
     expect(state.connections.map((connection) => connection.id)).toEqual(["cli-qdrant"]);
     expect(state.onboarding.missingConfig).toBe(true);
   });
+
+  test("interpolates ${VAR} references in api_key and preserves the literal", () => {
+    const state = parseConfigText(
+      `
+        [connections.cloud-pinecone]
+        provider = "pinecone"
+        api_key = "\${PINECONE_API_KEY}"
+      `,
+      undefined,
+      (name) => (name === "PINECONE_API_KEY" ? "pcsk-resolved" : undefined),
+    );
+
+    expect(state.connections[0]).toMatchObject({
+      apiKey: "pcsk-resolved",
+      apiKeyRaw: "${PINECONE_API_KEY}",
+    });
+  });
+
+  test("interpolates ${VAR} references in url and preserves the literal", () => {
+    const state = parseConfigText(
+      `
+        [connections.cloud-qdrant]
+        provider = "qdrant"
+        url = "\${QDRANT_URL}"
+      `,
+      undefined,
+      (name) => (name === "QDRANT_URL" ? "https://cluster.qdrant.io:6333" : undefined),
+    );
+
+    expect(state.connections[0]).toMatchObject({
+      url: "https://cluster.qdrant.io:6333",
+      urlRaw: "${QDRANT_URL}",
+    });
+  });
+
+  test("plaintext values do not emit *Raw fields", () => {
+    const state = parseConfigText(`
+      [connections.local-qdrant]
+      provider = "qdrant"
+      url = "http://localhost:6333"
+      api_key = "plain-secret"
+    `);
+
+    expect(state.connections[0]).not.toHaveProperty("urlRaw");
+    expect(state.connections[0]).not.toHaveProperty("apiKeyRaw");
+  });
+
+  test("missing env var referenced from api_key fails parse", () => {
+    expect(() =>
+      parseConfigText(
+        `
+          [connections.cloud-pinecone]
+          provider = "pinecone"
+          api_key = "\${MISSING_KEY}"
+        `,
+        undefined,
+        () => undefined,
+      ),
+    ).toThrow(/MISSING_KEY/);
+  });
 });

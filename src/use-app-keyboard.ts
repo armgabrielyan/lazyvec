@@ -222,8 +222,8 @@ export function useAppKeyboard({
           fields: {
             name: selectedConnection.name,
             provider: selectedConnection.provider,
-            url: selectedConnection.url ?? "",
-            apiKey: selectedConnection.apiKey ?? "",
+            url: selectedConnection.urlRaw ?? selectedConnection.url ?? "",
+            apiKey: selectedConnection.apiKeyRaw ?? selectedConnection.apiKey ?? "",
           },
         });
         return;

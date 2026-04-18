@@ -26,6 +26,23 @@ provider = "pinecone"
 api_key = "pcsk-..."
 ```
 
+Secrets can be interpolated from environment variables using `${VAR}` inside `api_key` or
+`url`. The env var must be set — lazyvec fails fast with a clear error if it's missing:
+
+```toml
+[connections.cloud-pinecone]
+provider = "pinecone"
+api_key = "${PINECONE_API_KEY}"
+
+[connections.cloud-qdrant]
+provider = "qdrant"
+url = "${QDRANT_URL}"
+api_key = "${QDRANT_API_KEY}"
+```
+
+Opening Edit on an env-referenced connection shows the literal `${VAR}` in the form, so
+saving preserves the reference.
+
 Or use quick-connect flags:
 
 ```bash

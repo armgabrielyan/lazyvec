@@ -16,6 +16,8 @@ export interface ConnectionProfile {
   provider: Provider;
   url?: string;
   apiKey?: string;
+  urlRaw?: string;
+  apiKeyRaw?: string;
   description: string;
   source: ConnectionSource;
 }
