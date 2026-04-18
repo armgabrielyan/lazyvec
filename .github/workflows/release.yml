@@ -11,18 +11,21 @@ permissions:
 jobs:
   build:
     name: Build ${{ matrix.target.name }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.target.os }}
     strategy:
       fail-fast: false
       matrix:
+        # Each target builds natively on its own runner. Cross-compiling is
+        # impossible here because @opentui/core loads platform-specific native
+        # submodules (@opentui/core-<platform>-<arch>) at runtime, and only the
+        # runner's own submodule is installed.
         target:
-          - { bun: bun-linux-x64, name: linux-x64, ext: tar.gz, exe: lazyvec }
-          - { bun: bun-linux-arm64, name: linux-arm64, ext: tar.gz, exe: lazyvec }
-          - { bun: bun-darwin-x64, name: darwin-x64, ext: tar.gz, exe: lazyvec }
-          - { bun: bun-darwin-arm64, name: darwin-arm64, ext: tar.gz, exe: lazyvec }
-          - { bun: bun-windows-x64, name: windows-x64, ext: zip, exe: lazyvec.exe }
+          - { os: ubuntu-latest,     name: linux-x64,     ext: tar.gz, exe: lazyvec }
+          - { os: ubuntu-24.04-arm,  name: linux-arm64,   ext: tar.gz, exe: lazyvec }
+          - { os: macos-13,          name: darwin-x64,    ext: tar.gz, exe: lazyvec }
+          - { os: macos-14,          name: darwin-arm64,  ext: tar.gz, exe: lazyvec }
+          - { os: windows-latest,    name: windows-x64,   ext: zip,    exe: lazyvec.exe }
     env:
-      TARGET_BUN: ${{ matrix.target.bun }}
       TARGET_NAME: ${{ matrix.target.name }}
       TARGET_EXT: ${{ matrix.target.ext }}
       TARGET_EXE: ${{ matrix.target.exe }}
@@ -39,21 +42,22 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Compile binary
+        shell: bash
         run: |
           mkdir -p dist
           bun build ./src/index.tsx \
             --compile \
             --minify \
-            --target="$TARGET_BUN" \
             --outfile "dist/$TARGET_EXE"
 
       - name: Package archive
+        shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           ARCHIVE="lazyvec-${VERSION}-${TARGET_NAME}.${TARGET_EXT}"
           cd dist
           if [ "$TARGET_EXT" = "zip" ]; then
-            zip "../$ARCHIVE" "$TARGET_EXE"
+            7z a "../$ARCHIVE" "$TARGET_EXE" >/dev/null
           else
             tar -czf "../$ARCHIVE" "$TARGET_EXE"
           fi
