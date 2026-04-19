@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/armgabrielyan/lazyvec/compare/v0.1.0...v0.1.1) (2026-04-19)
+
+
+### Bug Fixes
+
+* **ci:** ad-hoc sign macOS binaries after bun --compile ([aac7125](https://github.com/armgabrielyan/lazyvec/commit/aac712538f2667f90681ce9fcc8ca46374bc96dd))
+
 ## 0.1.0 (2026-04-18)
 
 
