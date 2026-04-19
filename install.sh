@@ -44,6 +44,11 @@ detect_target() {
     *)             fail "Unsupported architecture: $arch" ;;
   esac
 
+  # Prebuilt Intel macOS binaries are not shipped — install from source on those hosts.
+  if [ "$os_name" = "darwin" ] && [ "$arch_name" = "x64" ]; then
+    fail "Intel macOS prebuilt binaries are not available. Install from source: https://github.com/armgabrielyan/lazyvec#-from-source"
+  fi
+
   # Linux arm64 is supported but less tested — warn but continue.
   if [ "$os_name" = "linux" ] && [ "$arch_name" = "arm64" ]; then
     warn "linux-arm64 builds are provided but not routinely tested"

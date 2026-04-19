@@ -96,12 +96,12 @@ Grab a tarball (or `.zip` for Windows) from the [GitHub Releases](https://github
 
 | Platform | Architecture | Archive |
 |----------|--------------|---------|
-| macOS | Intel | `lazyvec-VERSION-darwin-x64.tar.gz` |
 | macOS | Apple Silicon | `lazyvec-VERSION-darwin-arm64.tar.gz` |
 | Linux | x86_64 | `lazyvec-VERSION-linux-x64.tar.gz` |
 | Linux | ARM64 | `lazyvec-VERSION-linux-arm64.tar.gz` |
 | Windows | x86_64 | `lazyvec-VERSION-windows-x64.zip` |
 
+Intel Mac binaries are not currently shipped — install [from source](#-from-source).
 Each release also includes `SHA256SUMS.txt`.
 
 ### 🔨 From Source

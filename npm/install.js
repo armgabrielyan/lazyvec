@@ -17,7 +17,6 @@ const pkg = require("./package.json");
 const version = pkg.version;
 
 const targetMap = {
-  "darwin-x64": { target: "darwin-x64", ext: "tar.gz", exe: "lazyvec" },
   "darwin-arm64": { target: "darwin-arm64", ext: "tar.gz", exe: "lazyvec" },
   "linux-x64": { target: "linux-x64", ext: "tar.gz", exe: "lazyvec" },
   "linux-arm64": { target: "linux-arm64", ext: "tar.gz", exe: "lazyvec" },

@@ -22,7 +22,6 @@ jobs:
         target:
           - { os: ubuntu-latest,     name: linux-x64,     ext: tar.gz, exe: lazyvec }
           - { os: ubuntu-24.04-arm,  name: linux-arm64,   ext: tar.gz, exe: lazyvec }
-          - { os: macos-13,          name: darwin-x64,    ext: tar.gz, exe: lazyvec }
           - { os: macos-14,          name: darwin-arm64,  ext: tar.gz, exe: lazyvec }
           - { os: windows-latest,    name: windows-x64,   ext: zip,    exe: lazyvec.exe }
     env:
