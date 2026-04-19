@@ -49,6 +49,17 @@ jobs:
             --minify \
             --outfile "dist/$TARGET_EXE"
 
+      # Bun's --compile writes a malformed stub code signature on macOS; the
+      # arm64 kernel SIGKILLs such binaries at load time. Strip the stub and
+      # ad-hoc re-sign so the binary is runnable without a paid Developer ID.
+      - name: Ad-hoc sign macOS binary
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          codesign --remove-signature "dist/$TARGET_EXE"
+          codesign --sign - "dist/$TARGET_EXE"
+          codesign --verify --verbose "dist/$TARGET_EXE"
+
       - name: Package archive
         shell: bash
         run: |
